@@ -13,6 +13,7 @@
   <RouterLink to="/Inventory">Inventory</RouterLink> 
   <RouterLink to="/Recipes">Recipes</RouterLink> 
   <RouterLink to="/Donation">Donation</RouterLink> 
+  <RouterLink to="/Dashboard">Dashboard</RouterLink> 
   
   <RouterView /> <!-- Content from components folder -->
 </template>
