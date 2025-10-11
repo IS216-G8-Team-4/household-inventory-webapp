@@ -2,8 +2,7 @@
 <script setup>
 import { onMounted, ref, reactive } from 'vue'
 
-/* Read your Google Maps key from Vite env.
-   Put VITE_GOOGLE_MAPS_API_KEY=... in your .env (project root) */
+/* Read your Google Maps key from Vite env. */
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
 
 const mapEl = ref(null)
