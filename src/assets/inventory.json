@@ -3,7 +3,7 @@
         {
         "id": 1,
         "name": "Eggs",
-        "category": "Dairy",
+        "category": "Dairy & Eggs",
         "unit": "pcs",
         "batches": [
             {
@@ -20,7 +20,7 @@
         {
         "id": 2,
         "name": "Milk",
-        "category": "Dairy",
+        "category": "Dairy & Eggs",
         "unit": "ml",
         "batches": [
             {
@@ -33,7 +33,7 @@
         {
         "id": 3,
         "name": "Rice",
-        "category": "Grains",
+        "category": "Grains & Pasta",
         "unit": "kg",
         "batches": [
             {

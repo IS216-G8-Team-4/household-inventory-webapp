@@ -1,6 +1,12 @@
 <script setup>
+    import { useRouter } from 'vue-router'
     // Imports contents from inventory.json. @ (src directory. @/assets/ = src/assests/)
     import inventoryData from '@/assets/inventory.json'
+
+    const router = useRouter()
+    function goToCreate() {
+        router.push('/Inventory/Create');
+    }
 </script>
 
 <script>
@@ -15,7 +21,10 @@
 
 <template>   
     <div class="inventory">
-        <h1>Inventory Page</h1>
+        <div class="header">
+            <h1>Inventory Page</h1>
+            <button class="create-btn" @click="goToCreate">+ Create Ingredient</button>
+        </div>
 
         <div v-for="item in inventory" :key="item.id" class="ingredient-card">
             <h2>{{ item.name }}</h2>
@@ -75,5 +84,24 @@
 
     th {
         background: #eee;
+    }
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .create-btn {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    .create-btn:hover {
+    background-color: #0056b3;
     }
 </style>
