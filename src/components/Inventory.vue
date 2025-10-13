@@ -105,3 +105,32 @@
     background-color: #0056b3;
     }
 </style>
+
+<template>
+  <div class="container mt-4">
+    <h3>My Donations</h3>
+    <div v-if="myDonations.length === 0" class="text-muted">No items donated yet.</div>
+
+    <div v-for="item in myDonations" :key="item.id" class="card mb-3">
+      <div class="card-body">
+        <h5>{{ item.item_name }}</h5>
+        <p>{{ item.description }}</p>
+        <p>Qty: {{ item.quantity }}</p>
+        <p>Status: <strong>{{ item.status }}</strong></p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
+
+const myDonations = ref([])
+
+onMounted(async () => {
+  const res = await axios.get('http://localhost:3000/api/mydonations?user_id=1')
+  myDonations.value = res.data
+})
+</script>
+
