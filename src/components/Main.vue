@@ -12,19 +12,6 @@
     }
 </script>
 
-<template>   
-
-    <h1>Main Page</h1>
-   
-</template>
-
-<style scope>
-    a {
-        margin: 5px;
-        display: block;
-    }
-</style>
-
 <template>
   <div class="container text-center mt-5">
     <h1>Welcome to Kyra’s Community Food Sharing</h1>
@@ -33,3 +20,10 @@
     <router-link to="/inventory" class="btn btn-outline-primary m-2">My Inventory</router-link>
   </div>
 </template>
+
+<style scope>
+    a {
+        margin: 5px;
+        display: block;
+    }
+</style>

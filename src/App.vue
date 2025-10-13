@@ -3,12 +3,6 @@
 <script setup></script>
 
 <template>
-
-  <RouterLink to="/">Home</RouterLink> 
-  <RouterLink to="/Inventory">Inventory</RouterLink> 
-  <RouterLink to="/Recipes">Recipes</RouterLink> 
-  <RouterLink to="/Donation">Donation</RouterLink> 
-  <RouterLink to="/Dashboard">Dashboard</RouterLink> 
   <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container-fluid">
       <!-- Brand -->
@@ -42,7 +36,7 @@
             <RouterLink class="nav-link" to="/Donation">Donation</RouterLink>
           </li>
             <li class="nav-item">
-            <RouterLink class="nav-link" to="/Dashboard">Donation</RouterLink>
+            <RouterLink class="nav-link" to="/Dashboard">Dashboard</RouterLink>
           </li>
         </ul>
       </div>
