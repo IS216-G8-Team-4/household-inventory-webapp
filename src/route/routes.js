@@ -40,7 +40,7 @@ const routes = [
     path:'/SubmitDonation',
     component: SubmitDonation
   }
-  },
+  ,
   {
     path:'/Dashboard',
     component: Dashboard
