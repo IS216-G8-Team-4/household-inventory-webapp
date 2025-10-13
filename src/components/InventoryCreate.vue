@@ -40,7 +40,7 @@
         }
 
         // (Simulated update)
-        alert('Ingredient added or updated! (Note: JSON file not rewritten in frontend)')
+        alert('Ingredient added or updated! \n(Note: Locally only. JSON file not rewritten in frontend)')
         router.push('/Inventory')
     }
 </script>
@@ -79,7 +79,7 @@
 
             <button type="submit">Save</button>
         </form>
-    </div>   
+    </div>
 </template>
 
 <style scope>

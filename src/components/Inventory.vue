@@ -4,8 +4,16 @@
     import inventoryData from '@/assets/inventory.json'
 
     const router = useRouter()
+
     function goToCreate() {
         router.push('/Inventory/Create');
+    }
+
+    function goToEdit(itemId, batchIndex) {
+        router.push({
+            path: `/Inventory/Edit`,
+            query: { id: itemId, batch: batchIndex }
+        })
     }
 </script>
 
@@ -33,16 +41,20 @@
 
             <table>
                 <thead>
-                <tr>
-                    <th>Quantity</th>
-                    <th>Expiry Date</th>
-                </tr>
+                    <tr>
+                        <th>Quantity</th>
+                        <th>Expiry Date</th>
+                        <th class="edit-header"></th>
+                    </tr>
                 </thead>
                 <tbody>
-                <tr v-for="batch in item.batches" :key="batch.batchId">
-                    <td>{{ batch.quantity }}</td>
-                    <td>{{ batch.expiryDate }}</td>
-                </tr>
+                    <tr v-for="(batch, index) in item.batches" :key="batch.batchId">
+                        <td>{{ batch.quantity }}</td>
+                        <td>{{ batch.expiryDate }}</td>
+                        <td class="edit-cell">
+                            <button class="edit-btn" @click="goToEdit(item.id, index)">Edit</button>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -76,7 +88,8 @@
         margin-top: 10px;
     }
 
-    th, td {
+    th, 
+    td {
         border: 1px solid #ccc;
         padding: 8px;
         text-align: left;
@@ -102,6 +115,27 @@
     }
 
     .create-btn:hover {
-    background-color: #0056b3;
+        background-color: #0056b3;
+    }
+
+    th.edit-header, 
+    td.edit-cell {
+        width: 1%;              /* Shrinks as much as possible */
+        white-space: nowrap;    /* Prevent button from wrapping */
+        padding: 4px 8px;       /* Reduce padding */
+        text-align: right;
+    }
+
+    .edit-btn {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .edit-btn:hover {
+        background-color: #218838;
     }
 </style>
