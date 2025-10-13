@@ -7,6 +7,7 @@ import {
 import Main from '../components/Main.vue';
 import Inventory from '../components/Inventory.vue';
 import InventoryCreate from '../components/InventoryCreate.vue';
+import InventoryEdit from '../components/InventoryEdit.vue';
 import Recipes from '../components/Recipes.vue';
 import Donation from '../components/Donation.vue';
 import SubmitDonation from '../components/SubmitDonation.vue';
@@ -27,6 +28,10 @@ const routes = [
   {
     path: '/Inventory/Create',
     component: InventoryCreate
+  },
+  {
+    path: '/Inventory/Edit',
+    component: InventoryEdit
   },
   {
     path: '/Recipes',
