@@ -12,6 +12,9 @@ import Recipes from '../components/Recipes.vue';
 import Donation from '../components/Donation.vue';
 import SubmitDonation from '../components/SubmitDonation.vue';
 import Dashboard from '../components/Dashboard.vue';
+import Loading from "@/components/Loading.vue";
+import login from "@/components/login.vue";
+import { compile } from "vue";
 // To add more pages
 
 
@@ -49,6 +52,14 @@ const routes = [
   {
     path:'/Dashboard',
     component: Dashboard
+  },
+  {
+    path:'/Loading',
+    component: Loading
+  },
+  {
+    path:'/login',
+    component: login
   }
   // To add more pages
 ]
