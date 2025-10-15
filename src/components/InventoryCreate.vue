@@ -69,7 +69,21 @@
             </select>
 
             <label>Unit:</label>
-            <input v-model="unit" placeholder="kg" required />
+            <select v-model="unit" required>
+                <option disabled value="">Select unit</option>
+                <optgroup label="Weight">
+                    <option>kg</option>
+                    <option>g</option>
+                </optgroup>
+                <optgroup label="Volume">
+                    <option>L</option>
+                    <option>ml</option>
+                </optgroup>
+                <optgroup label="Count / Pieces">
+                    <option>pcs</option>
+                    <option>pack</option>
+                </optgroup>
+            </select>
 
             <label>Quantity:</label>
             <input type="number" v-model="quantity" placeholder="1" required />
