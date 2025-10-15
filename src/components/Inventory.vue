@@ -18,12 +18,26 @@
         })
     }
 
-        const myDonations = ref([])
+    const myDonations = ref([])
 
     onMounted(async () => {
     const res = await axios.get('http://localhost:3000/api/mydonations?user_id=1')
     myDonations.value = res.data
     })
+
+    function timeUntilExpiry(expiryDateStr) {
+        const today = new Date()
+        const expiryDate = new Date(expiryDateStr)
+
+        if (isNaN(expiryDate)) return 'Invalid date'
+
+        const diffMs = expiryDate - today // Calculate the time remaining in milliseconds
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) // Convert to days
+
+        if (diffDays < 0) return 'Expired'
+        if (diffDays === 0) return 'Expires today'
+        return `${diffDays} day${diffDays > 1 ? 's' : ''} left`
+    }
 </script>
 
 <script>
@@ -52,14 +66,14 @@
                 <thead>
                     <tr>
                         <th>Quantity</th>
-                        <th>Expiry Date</th>
+                        <th>Days Until Expiry</th>
                         <th class="edit-header"></th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="(batch, index) in item.batches" :key="batch.batchId">
                         <td>{{ batch.quantity }}</td>
-                        <td>{{ batch.expiryDate }}</td>
+                        <td>{{ timeUntilExpiry(batch.expiryDate) }}</td>
                         <td class="edit-cell">
                             <button class="edit-btn" @click="goToEdit(item.id, index)">Edit</button>
                         </td>
