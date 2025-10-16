@@ -1,7 +1,12 @@
 <script setup>
+    // HARDCODED householdId for now. To remove once session is added
+    const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
+
+
+
     import { ref } from 'vue'
     import { useRouter } from 'vue-router'
-    import inventoryData from '@/assets/inventory.json'
+    import { supabase } from '@/lib/supabase.js'
 
     const router = useRouter();
 
@@ -12,36 +17,74 @@
     const quantity = ref(0);
     const expiryDate = ref('');
 
-    function saveIngredient() {
-        const existing = inventoryData.ingredients.find(
-            item => item.name.toLowerCase() === name.value.toLowerCase()
-        )
+    async function saveIngredient() {
+        try {
+            // Check if ingredient exists for the household
+            const { data: existingIngredients, error: fetchError } = await supabase
+                .from('ingredients')
+                .select('*')
+                .eq('household_id', householdId)
+                .eq('name', name.value)
 
-        if (!existing) {
-            // Create a new ingredient
-            const newId = inventoryData.ingredients.length + 1;
-            inventoryData.ingredients.push({
-                id: newId,
-                name: name.value,
-                category: category.value,
-                unit: unit.value,
-                batches: [{ quantity: Number(quantity.value), expiryDate: expiryDate.value }]
-            })
-        } else {
-            // Update existing ingredient
-            const sameBatch = existing.batches.find(batch => batch.expiryDate === expiryDate.value)
-            if (sameBatch) {
-                // Increase qty of the same batch
-                sameBatch.quantity += Number(quantity.value);
+            if (fetchError) throw fetchError
+
+            let ingredientId
+
+            if (existingIngredients.length === 0) {
+                // Insert new ingredient
+                const { data: newIngredient, error: insertError } = await supabase
+                    .from('ingredients')
+                    .insert([{
+                        household_id: householdId,
+                        name: name.value,
+                        category: category.value,
+                        unit: unit.value
+                    }])
+                    .select() // returns the inserted row
+
+                if (insertError) throw insertError
+                ingredientId = newIngredient[0].id
             } else {
-                // Add a new batch to the ingredient
-                existing.batches.push({ quantity: Number(quantity.value), expiryDate: expiryDate.value });
+                ingredientId = existingIngredients[0].id
             }
-        }
 
-        // (Simulated update)
-        alert('Ingredient added or updated! \n(Note: Locally only. JSON file not rewritten in frontend)')
-        router.push('/Inventory')
+            // Check if batch with same expiry date exists
+            const { data: existingBatches, error: batchError } = await supabase
+                .from('ingredient_batches')
+                .select('*')
+                .eq('ingredient_id', ingredientId)
+                .eq('expiry_date', expiryDate.value)
+
+            if (batchError) throw batchError
+
+            if (existingBatches.length === 0) {
+                // Insert new batch
+                const { error: batchInsertError } = await supabase
+                    .from('ingredient_batches')
+                    .insert([{
+                        ingredient_id: ingredientId,
+                        quantity: quantity.value,
+                        expiry_date: expiryDate.value
+                    }])
+                if (batchInsertError) throw batchInsertError
+            } else {
+                // Update existing batch quantity
+                const { error: batchUpdateError } = await supabase
+                    .from('ingredient_batches')
+                    .update({
+                        quantity: existingBatches[0].quantity + Number(quantity.value)
+                    })
+                    .eq('id', existingBatches[0].id)
+
+                if (batchUpdateError) throw batchUpdateError
+            }
+
+            alert('Ingredient saved successfully!')
+            router.push('/Inventory')
+        } catch (error) {
+            console.error('Error saving ingredient:', error)
+            alert('Failed to save ingredient. See console for details.')
+        }
     }
 </script>
 

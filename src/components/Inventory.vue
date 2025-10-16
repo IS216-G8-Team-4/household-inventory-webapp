@@ -1,6 +1,5 @@
 <script setup>
-    
-    // HARDCODED Household Id. TO REMOVE once session is added
+    // HARDCODED householdId for now. To remove once session is added
     const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
 
 
@@ -25,8 +24,9 @@
 
     // Function to calculate days until expiry
     function timeUntilExpiry(expiryDateStr) { 
-        const today = new Date()
-        const expiryDate = new Date(expiryDateStr)
+        // .setHours(0, 0, 0, 0) = Normalize both dates to midnight local time (The start of the day in local time zone)
+        const today = new Date().setHours(0, 0, 0, 0)
+        const expiryDate = new Date(expiryDateStr).setHours(0, 0, 0, 0)
 
         if (isNaN(expiryDate)) return 'Invalid date'
 
@@ -34,7 +34,7 @@
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) // Convert to days
 
         if (diffDays < 0) return 'Expired'
-        if (diffDays === 0) return 'Expires today'
+        if (diffDays === 0) return 'Today'
         return `${diffDays} day${diffDays > 1 ? 's' : ''} left`
     }
 
@@ -117,13 +117,15 @@
                 <thead>
                     <tr>
                         <th>Quantity</th>
-                        <th>Days Until Expiry</th>
+                        <th>Expiry Date</th>
+                        <th>Expires In</th>
                         <th class="edit-header"></th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="(batch, index) in item.batches" :key="batch.batchId">
                         <td>{{ batch.quantity }}</td>
+                        <td>{{ batch.expiryDate }}</td>
                         <td>{{ timeUntilExpiry(batch.expiryDate) }}</td>
                         <td class="edit-cell">
                             <button class="edit-btn" @click="goToEdit(item.id, index)">Edit</button>
