@@ -15,10 +15,10 @@
         router.push('/Inventory/Create');
     }
 
-    function goToEdit(itemId, batchIndex) {
+    function goToEdit(itemId, batchId) {
         router.push({
             path: `/Inventory/Edit`,
-            query: { id: itemId, batch: batchIndex }
+            query: { id: itemId, batch: batchId }
         })
     }
 
@@ -123,12 +123,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(batch, index) in item.batches" :key="batch.batchId">
+                    <tr v-for="batch in item.batches" :key="batch.id">
                         <td>{{ batch.quantity }}</td>
                         <td>{{ batch.expiryDate }}</td>
                         <td>{{ timeUntilExpiry(batch.expiryDate) }}</td>
                         <td class="edit-cell">
-                            <button class="edit-btn" @click="goToEdit(item.id, index)">Edit</button>
+                            <button class="edit-btn" @click="goToEdit(item.id, batch.id)">Edit</button>
                         </td>
                     </tr>
                 </tbody>

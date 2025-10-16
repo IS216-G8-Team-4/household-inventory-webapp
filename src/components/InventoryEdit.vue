@@ -1,60 +1,108 @@
 <script setup>
-    import { ref } from 'vue'
+    // HARDCODED householdId for now. To remove once session is added
+    const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
+
+
+
+    import { ref, onMounted } from 'vue'
     import { useRoute, useRouter } from 'vue-router'
-    import inventoryData from '@/assets/inventory.json'
+    // import inventoryData from '@/assets/inventory.json'
+    import { supabase } from '@/lib/supabase.js'
 
     const route = useRoute();
     const router = useRouter();
 
     // Get parameters from URL
-    const id = parseInt(route.query.id)
-    const batchIndex = parseInt(route.query.batch)
+    const ingredientId = route.query.id
+    const batchId = route.query.batch
 
-    // Find the ingredient and batch
-    const ingredient = inventoryData.ingredients.find(item => item.id === id)
-    const batch = ingredient ? ingredient.batches[batchIndex] : null
+    // Reactive form fields
+    const name = ref('')
+    const category = ref('')
+    const unit = ref('')
+    const quantity = ref(0)
+    const expiryDate = ref('')
 
-    // Use refs for reactive form fields
-    // ref() - Vue.js function that creates a reactive reference
-    const name = ref(ingredient?.name || '')
-    const category = ref(ingredient?.category || '')
-    const unit = ref(ingredient?.unit || '')
-    const quantity = ref(batch?.quantity || 0)
-    const expiryDate = ref(batch?.expiryDate || '')
+    const ingredientExists = ref(false)
 
-    function saveChanges() {
-        if (!ingredient || !batch) return
+    // Fetch ingredient and batch from Supabase
+    onMounted(async () => {
+        try {
+            // Fetch ingredient
+            const { data: ingredientData, error: ingredientError } = await supabase
+                .from('ingredients')
+                .select('*')
+                .eq('id', ingredientId)
+                .eq('household_id', householdId)
+                .single()
 
-        // Update the in-memory data (currently not persistent)
-        batch.quantity = quantity.value
-        batch.expiryDate = expiryDate.value
+            if (ingredientError) throw ingredientError
+            if (!ingredientData) return
 
-        alert('Batch updated successfully! \n(Note: Locally only. JSON file not rewritten in frontend)')
-        router.push('/Inventory')
+            name.value = ingredientData.name
+            category.value = ingredientData.category
+            unit.value = ingredientData.unit
+            ingredientExists.value = true
+
+            // Fetch batch
+            const { data: batchData, error: batchError } = await supabase
+                .from('ingredient_batches')
+                .select('*')
+                .eq('id', batchId)
+                .single()
+
+            if (batchError) throw batchError
+            if (!batchData) return
+
+            quantity.value = batchData.quantity
+            expiryDate.value = batchData.expiry_date
+        } catch (error) {
+            console.error('Error fetching ingredient/batch:', error)
+            alert('Failed to load ingredient or batch. Check console.')
+        }
+    })
+
+    async function saveChanges() {
+        if (!ingredientExists.value) return
+
+        try {
+            const { error: updateError } = await supabase
+                .from('ingredient_batches')
+                .update({
+                    quantity: Number(quantity.value),
+                    expiry_date: expiryDate.value
+                })
+                .eq('id', batchId)
+
+            if (updateError) throw updateError
+
+            alert('Batch updated successfully!')
+            router.push('/Inventory')
+        } catch (error) {
+            console.error('Error updating batch:', error)
+            alert('Failed to update batch. See console for details.')
+        }
     }
 
-    function deleteBatch() {
-        if (!ingredient || batchIndex === undefined) return
+    async function deleteBatch() {
+        try {
+            const confirmDelete = confirm(`Are you sure you want to delete this batch of ${name.value} (Expiry: ${expiryDate.value})?`)
+            if (!confirmDelete) return
 
-        // Confirm before deleting
-        const confirmDelete = confirm(
-            `Are you sure you want to delete this batch of ${ingredient.name} (Expiry: ${batch.expiryDate})?`
-        )
-        if (!confirmDelete) return
+            // Delete batch
+            const { error: deleteError } = await supabase
+                .from('ingredient_batches')
+                .delete()
+                .eq('id', batchId)
 
-        // Remove the batch from ingredient's batches
-        ingredient.batches.splice(batchIndex, 1)
+            if (deleteError) throw deleteError
 
-        // If ingredient has no batches left, remove it from inventoryData.ingredients
-        if (ingredient.batches.length === 0) {
-            const ingredientIndex = inventoryData.ingredients.findIndex(item => item.id === ingredient.id)
-            if (ingredientIndex !== -1) {
-                inventoryData.ingredients.splice(ingredientIndex, 1)
-            }
+            alert('Batch deleted successfully!')
+            router.push('/Inventory')
+        } catch (error) {
+            console.error('Error deleting batch:', error)
+            alert('Failed to delete batch. See console for details.')
         }
-
-        alert('Batch deleted successfully! \n(Note: Locally only. JSON file not rewritten in frontend)')
-        router.push('/Inventory')
     }
 </script>
 
@@ -62,7 +110,7 @@
     <div class="edit-page">
         <h1>Edit Ingredient Batch</h1>
 
-        <div v-if="ingredient">
+        <div v-if="ingredientExists">
             <p><strong>Ingredient:</strong> {{ name }}</p>
             <p><strong>Category:</strong> {{ category }}</p>
             <p><strong>Unit:</strong> {{ unit }}</p>
