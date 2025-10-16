@@ -1,9 +1,14 @@
 <script setup>
-    import { useRouter } from 'vue-router'
-    // Imports contents from inventory.json. @ (src directory. @/assets/ = src/assests/)
-    import inventoryData from '@/assets/inventory.json'
+    
+    // HARDCODED Household Id. TO REMOVE once session is added
+    const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
+
+
+
     import { ref, onMounted } from 'vue'
+    import { useRouter } from 'vue-router'
     import axios from 'axios'
+    import { supabase } from '@/lib/supabase.js' // @ = src directory. @/lib/ = src/lib/)
 
     const router = useRouter()
 
@@ -18,14 +23,8 @@
         })
     }
 
-    const myDonations = ref([])
-
-    onMounted(async () => {
-    const res = await axios.get('http://localhost:3000/api/mydonations?user_id=1')
-    myDonations.value = res.data
-    })
-
-    function timeUntilExpiry(expiryDateStr) {
+    // Function to calculate days until expiry
+    function timeUntilExpiry(expiryDateStr) { 
         const today = new Date()
         const expiryDate = new Date(expiryDateStr)
 
@@ -38,14 +37,66 @@
         if (diffDays === 0) return 'Expires today'
         return `${diffDays} day${diffDays > 1 ? 's' : ''} left`
     }
+
+    const inventory = ref([]) // Hold Supabase data
+
+
+
+    const myDonations = ref([])
+
+    onMounted(async () => {
+        // Fetch ingredients for this household
+        const { data: ingredientsData, error: ingredientsError } = await supabase
+            .from('ingredients')
+            .select('*')
+            .eq('household_id', householdId)
+
+        if (ingredientsError) {
+            console.error('Error fetching ingredients:', ingredientsError)
+            return
+        }
+
+        // For each ingredient, fetch its batches
+        const enrichedIngredients = await Promise.all(
+            ingredientsData.map(async (ingredient) => {
+                const { data: batchesData, error: batchesError } = await supabase
+                    .from('ingredient_batches')
+                    .select('*')
+                    .eq('ingredient_id', ingredient.id)
+
+                if (batchesError) {
+                    console.error(`Error fetching batches for ${ingredient.name}:`, batchesError)
+                    return { ...ingredient, batches: [] }
+                }
+
+                // Map batches to match previous structure
+                const batches = batchesData.map(batch => ({
+                    id: batch.id,
+                    quantity: batch.quantity,
+                    expiryDate: batch.expiry_date
+                }))
+
+                return {
+                    ...ingredient,
+                    batches
+                }
+            })
+        )
+
+        inventory.value = enrichedIngredients
+        // console.log('Inventory fetched:', inventory.value) // Console Log: Fetched Ingredients with Batches
+
+
+
+        const res = await axios.get('http://localhost:3000/api/mydonations?user_id=1')
+        myDonations.value = res.data
+    })
 </script>
 
 <script>
     export default { 
         data() {
-            return {
-                inventory: inventoryData.ingredients
-            }
+            return {}
         }
     }
 </script>
