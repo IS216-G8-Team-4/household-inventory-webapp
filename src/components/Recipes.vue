@@ -1,12 +1,15 @@
-<script setup>
-import inventoryData from '@/assets/inventory.json'
-</script>
-
 <script>
+import { supabase } from '@/lib/supabase.js'
+
+// HARDCODED householdId - IMPORTANT: Update this to match your actual household ID
+const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
+
 export default {
     data() {
         return {
-            inventory: inventoryData.ingredients,
+            householdId: householdId, // Make it available in the component
+            inventory: [],
+            expiringIngredients: [],
             recipes: [],
             filteredRecipes: [],
             loading: false,
@@ -17,7 +20,8 @@ export default {
                 cuisine: '',
                 maxTime: '',
                 dietaryPreference: '',
-                searchQuery: ''
+                searchQuery: '',
+                useExpiringOnly: false  // NEW: Filter for expiring ingredients
             },
             
             // Available filter options
@@ -27,12 +31,6 @@ export default {
                       'Portuguese', 'Russian', 'Spanish', 'Thai', 'Tunisian', 'Turkish', 'Vietnamese'],
             
             dietaryOptions: ['Vegetarian', 'Vegan', 'Seafood', 'Beef', 'Chicken', 'Pork', 'Lamb'],
-            
-            // User preferences (can be expanded to load from profile)
-            userPreferences: {
-                allergies: [],
-                dietaryGoals: ''
-            },
             
             selectedRecipe: null
         }
@@ -44,6 +42,11 @@ export default {
             return this.inventory.map(item => item.name.toLowerCase())
         },
         
+        // Get expiring ingredients (within 7 days)
+        expiringIngredientNames() {
+            return this.expiringIngredients.map(item => item.name.toLowerCase())
+        },
+        
         // Calculate match percentage for each recipe
         recipesWithMatch() {
             return this.recipes.map(recipe => {
@@ -51,6 +54,13 @@ export default {
                 const matchedIngredients = recipeIngredients.filter(ing => 
                     this.availableIngredients.some(avail => 
                         avail.includes(ing.toLowerCase()) || ing.toLowerCase().includes(avail)
+                    )
+                )
+                
+                // NEW: Check which matched ingredients are expiring
+                const expiringMatchedIngredients = matchedIngredients.filter(ing =>
+                    this.expiringIngredientNames.some(expiring =>
+                        expiring.includes(ing.toLowerCase()) || ing.toLowerCase().includes(expiring)
                     )
                 )
                 
@@ -66,14 +76,115 @@ export default {
                     ...recipe,
                     matchPercentage,
                     matchedIngredients,
+                    expiringMatchedIngredients,  // NEW
                     missingIngredients,
                     totalIngredients: recipeIngredients.length
                 }
-            }).sort((a, b) => b.matchPercentage - a.matchPercentage)
+            }).sort((a, b) => {
+                // NEW: Prioritize recipes with expiring ingredients
+                if (this.filters.useExpiringOnly) {
+                    if (a.expiringMatchedIngredients.length !== b.expiringMatchedIngredients.length) {
+                        return b.expiringMatchedIngredients.length - a.expiringMatchedIngredients.length
+                    }
+                }
+                return b.matchPercentage - a.matchPercentage
+            })
         }
     },
     
     methods: {
+        // NEW: Fetch inventory from Supabase
+        async fetchInventory() {
+            try {
+                console.log('Fetching inventory for household:', this.householdId)
+                
+                const { data, error } = await supabase
+                    .from('ingredients')
+                    .select(`
+                        id,
+                        name,
+                        category,
+                        unit,
+                        ingredient_batches (
+                            id,
+                            quantity,
+                            expiry_date,
+                            status
+                        )
+                    `)
+                    .eq('household_id', this.householdId)
+                
+                if (error) throw error
+                
+                // Flatten the data structure
+                this.inventory = data.map(ingredient => ({
+                    id: ingredient.id,
+                    name: ingredient.name,
+                    category: ingredient.category,
+                    unit: ingredient.unit,
+                    batches: ingredient.ingredient_batches || []
+                }))
+                
+                console.log('Fetched inventory:', this.inventory)
+                console.log('Number of items:', this.inventory.length)
+                
+                if (this.inventory.length === 0) {
+                    console.warn('No inventory items found! Check your household_id:', householdId)
+                }
+            } catch (error) {
+                console.error('Error fetching inventory:', error)
+                this.error = 'Failed to load inventory'
+            }
+        },
+        
+        // NEW: Fetch expiring ingredients (within 7 days)
+        async fetchExpiringIngredients() {
+            try {
+                const today = new Date().toISOString().split('T')[0]
+                const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                    .toISOString().split('T')[0]
+                
+                const { data, error } = await supabase
+                    .from('ingredient_batches')
+                    .select(`
+                        id,
+                        quantity,
+                        expiry_date,
+                        status,
+                        ingredient:ingredients (
+                            id,
+                            name,
+                            category
+                        )
+                    `)
+                    .eq('status', 'active')
+                    .gte('expiry_date', today)
+                    .lte('expiry_date', sevenDaysFromNow)
+                    .order('expiry_date', { ascending: true })
+                
+                if (error) throw error
+                
+                // Extract unique ingredients
+                const uniqueIngredients = new Map()
+                data.forEach(batch => {
+                    if (batch.ingredient && !uniqueIngredients.has(batch.ingredient.id)) {
+                        uniqueIngredients.set(batch.ingredient.id, {
+                            id: batch.ingredient.id,
+                            name: batch.ingredient.name,
+                            category: batch.ingredient.category,
+                            expiryDate: batch.expiry_date,
+                            quantity: batch.quantity
+                        })
+                    }
+                })
+                
+                this.expiringIngredients = Array.from(uniqueIngredients.values())
+                console.log('Expiring ingredients:', this.expiringIngredients)
+            } catch (error) {
+                console.error('Error fetching expiring ingredients:', error)
+            }
+        },
+        
         // Extract ingredients from recipe object
         extractRecipeIngredients(recipe) {
             const ingredients = []
@@ -163,18 +274,32 @@ export default {
                     const categoryRecipes = await this.searchByCategory(this.filters.dietaryPreference)
                     categoryRecipes.forEach(r => recipeIds.add(r.idMeal))
                 } else {
-                    // Search by top inventory ingredients
+                    // Always search using all inventory (not just expiring)
+                    // We'll filter for expiring ingredients after getting all recipes
                     const topIngredients = this.inventory.slice(0, 5)
                     
+                    console.log('Searching recipes for ingredients:', topIngredients.map(i => i.name))
+                    
+                    if (topIngredients.length === 0) {
+                        console.warn('No ingredients to search! Inventory is empty.')
+                        this.error = 'No ingredients in inventory. Please add some ingredients first.'
+                        this.loading = false
+                        return
+                    }
+                    
                     for (const item of topIngredients) {
+                        console.log(`Fetching recipes for: ${item.name}`)
                         const recipes = await this.fetchRecipesByIngredient(item.name)
+                        console.log(`Found ${recipes.length} recipes for ${item.name}`)
                         recipes.forEach(r => recipeIds.add(r.idMeal))
                     }
+                    
+                    console.log(`Total unique recipe IDs found: ${recipeIds.size}`)
                 }
                 
                 // Fetch full details for each recipe
                 const detailedRecipes = []
-                const recipeIdArray = Array.from(recipeIds).slice(0, 20) // Limit to 20 recipes
+                const recipeIdArray = Array.from(recipeIds).slice(0, 20)
                 
                 for (const id of recipeIdArray) {
                     const details = await this.fetchRecipeDetails(id)
@@ -197,6 +322,13 @@ export default {
         // Apply filters to recipes
         applyFilters() {
             let filtered = this.recipesWithMatch
+            
+            // NEW: Filter to only show recipes with expiring ingredients
+            if (this.filters.useExpiringOnly) {
+                filtered = filtered.filter(recipe => 
+                    recipe.expiringMatchedIngredients.length > 0
+                )
+            }
             
             // Filter by search query
             if (this.filters.searchQuery) {
@@ -225,11 +357,21 @@ export default {
             if (percentage >= 60) return 'match-good'
             if (percentage >= 40) return 'match-fair'
             return 'match-low'
+        },
+        
+        // NEW: Check if an ingredient is expiring
+        isIngredientExpiring(ingredientName) {
+            return this.expiringIngredientNames.some(expiring =>
+                expiring.includes(ingredientName.toLowerCase()) || 
+                ingredientName.toLowerCase().includes(expiring)
+            )
         }
     },
     
-    mounted() {
-        this.loadRecipes()
+    async mounted() {
+        await this.fetchInventory()
+        await this.fetchExpiringIngredients()
+        await this.loadRecipes()
     }
 }
 </script>
@@ -239,6 +381,15 @@ export default {
         <div class="recipes-header">
             <h1>Recipe Recommendations</h1>
             <p class="subtitle">Recipes matched to your available ingredients</p>
+            
+            <!-- NEW: Expiring ingredients alert -->
+            <div v-if="expiringIngredients.length > 0" class="expiring-alert">
+                <strong>⚠️ {{ expiringIngredients.length }} ingredient(s) expiring soon:</strong>
+                {{ expiringIngredients.map(i => i.name).join(', ') }}
+            </div>
+            <div v-else-if="inventory.length > 0" class="alert alert-success mt-3" style="display: inline-block;">
+                <strong>✅ Great news!</strong> No ingredients expiring in the next 7 days.
+            </div>
         </div>
         
         <!-- Filters Section -->
@@ -253,7 +404,7 @@ export default {
                         placeholder="Search recipes...">
                 </div>
                 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select 
                         v-model="filters.cuisine"
                         @change="loadRecipes"
@@ -265,7 +416,7 @@ export default {
                     </select>
                 </div>
                 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select 
                         v-model="filters.dietaryPreference"
                         @change="loadRecipes"
@@ -277,13 +428,28 @@ export default {
                     </select>
                 </div>
                 
+                <!-- NEW: Expiring ingredients filter -->
                 <div class="col-md-3">
+                    <div class="form-check" style="padding-top: 8px;">
+                        <input 
+                            v-model="filters.useExpiringOnly"
+                            @change="loadRecipes"
+                            class="form-check-input" 
+                            type="checkbox" 
+                            id="expiringFilter">
+                        <label class="form-check-label" for="expiringFilter">
+                            🔥 Use expiring ingredients only
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="col-md-2">
                     <button 
                         @click="loadRecipes" 
                         class="btn btn-primary w-100"
                         :disabled="loading">
                         <span v-if="loading">Loading...</span>
-                        <span v-else>Refresh Recipes</span>
+                        <span v-else>Refresh</span>
                     </button>
                 </div>
             </div>
@@ -315,6 +481,10 @@ export default {
                     <div class="match-badge" :class="getMatchColorClass(recipe.matchPercentage)">
                         {{ recipe.matchPercentage }}% Match
                     </div>
+                    <!-- NEW: Show expiring ingredients badge -->
+                    <div v-if="recipe.expiringMatchedIngredients.length > 0" class="expiring-badge">
+                        🔥 {{ recipe.expiringMatchedIngredients.length }} expiring
+                    </div>
                 </div>
                 
                 <div class="recipe-content">
@@ -330,6 +500,13 @@ export default {
                             <strong>{{ recipe.matchedIngredients.length }}</strong> of 
                             <strong>{{ recipe.totalIngredients }}</strong> ingredients available
                         </p>
+                        
+                        <!-- NEW: Show expiring ingredients -->
+                        <div v-if="recipe.expiringMatchedIngredients.length > 0" class="expiring-ingredients">
+                            <small class="text-danger">
+                                <strong>Expiring:</strong> {{ recipe.expiringMatchedIngredients.join(', ') }}
+                            </small>
+                        </div>
                         
                         <div v-if="recipe.missingIngredients.length > 0" class="missing-ingredients">
                             <small class="text-muted">
@@ -350,7 +527,16 @@ export default {
         
         <!-- No Results -->
         <div v-if="!loading && filteredRecipes.length === 0" class="text-center my-5">
-            <p class="text-muted">No recipes found. Try adjusting your filters.</p>
+            <div v-if="filters.useExpiringOnly && expiringIngredients.length === 0" class="alert alert-info">
+                <h5>No expiring ingredients found! 🎉</h5>
+                <p>You don't have any ingredients expiring in the next 7 days.</p>
+                <p class="mb-0">Uncheck "Use expiring ingredients only" to see all recipes based on your inventory.</p>
+            </div>
+            <div v-else-if="filters.useExpiringOnly && expiringIngredients.length > 0" class="alert alert-warning">
+                <h5>No recipes found with expiring ingredients</h5>
+                <p class="mb-0">Try unchecking the filter to see more recipe options.</p>
+            </div>
+            <p v-else class="text-muted">No recipes found. Try adjusting your filters or adding more ingredients to your inventory.</p>
         </div>
         
         <!-- Recipe Detail Modal -->
@@ -367,6 +553,13 @@ export default {
                         
                         <div class="match-detail" :class="getMatchColorClass(selectedRecipe.matchPercentage)">
                             <h4>{{ selectedRecipe.matchPercentage }}% Ingredient Match</h4>
+                        </div>
+                        
+                        <!-- NEW: Show expiring ingredients in modal -->
+                        <div v-if="selectedRecipe.expiringMatchedIngredients.length > 0" 
+                             class="expiring-detail">
+                            <h5>🔥 Expiring Ingredients</h5>
+                            <p>{{ selectedRecipe.expiringMatchedIngredients.join(', ') }}</p>
                         </div>
                     </div>
                     
@@ -385,10 +578,12 @@ export default {
                                 :key="index"
                                 :class="{ 
                                     'ingredient-available': selectedRecipe.matchedIngredients.includes(ingredient),
+                                    'ingredient-expiring': isIngredientExpiring(ingredient),
                                     'ingredient-missing': !selectedRecipe.matchedIngredients.includes(ingredient)
                                 }">
                                 <span class="ingredient-icon">
                                     {{ selectedRecipe.matchedIngredients.includes(ingredient) ? '✓' : '✗' }}
+                                    {{ isIngredientExpiring(ingredient) ? '🔥' : '' }}
                                 </span>
                                 {{ getIngredientMeasure(selectedRecipe, index + 1) }} {{ ingredient }}
                             </li>
@@ -429,6 +624,16 @@ export default {
 .subtitle {
     color: #666;
     font-size: 1.1em;
+}
+
+/* NEW: Expiring ingredients alert */
+.expiring-alert {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+    color: #856404;
 }
 
 .filters-section {
@@ -483,6 +688,19 @@ export default {
     color: white;
 }
 
+/* NEW: Expiring ingredients badge */
+.expiring-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.85em;
+    background: #ff6b6b;
+    color: white;
+}
+
 .match-excellent {
     background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
 }
@@ -520,6 +738,14 @@ export default {
 .ingredient-summary {
     padding-top: 10px;
     border-top: 1px solid #eee;
+}
+
+/* NEW: Expiring ingredients styling */
+.expiring-ingredients {
+    margin-top: 8px;
+    padding: 8px;
+    background: #fff5f5;
+    border-radius: 5px;
 }
 
 .missing-ingredients {
@@ -583,6 +809,20 @@ export default {
     margin-bottom: 20px;
 }
 
+/* NEW: Expiring detail in modal */
+.expiring-detail {
+    background: #fff5f5;
+    border: 2px solid #ff6b6b;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.expiring-detail h5 {
+    color: #dc3545;
+    margin-bottom: 10px;
+}
+
 .recipe-badges {
     margin: 15px 0;
 }
@@ -601,6 +841,13 @@ export default {
 .ingredient-available {
     background: #d4edda;
     color: #155724;
+}
+
+/* NEW: Expiring ingredient styling */
+.ingredient-expiring {
+    background: #fff3cd !important;
+    color: #856404 !important;
+    border: 2px solid #ffc107;
 }
 
 .ingredient-missing {
