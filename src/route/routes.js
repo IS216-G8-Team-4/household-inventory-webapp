@@ -15,6 +15,9 @@ import Dashboard from '../components/Dashboard.vue';
 import Loading from "@/components/Loading.vue";
 import login from "@/components/login.vue";
 import { compile } from "vue";
+import ProfileForm from "@/components/ProfileForm.vue";
+import ProfileList from "@/components/ProfileList.vue";
+import ProfileEdit from "@/components/ProfileEdit.vue";
 // To add more pages
 
 
@@ -60,6 +63,18 @@ const routes = [
   {
     path:'/login',
     component: login
+  },
+  {
+    path:'/ProfileForm',
+    component: ProfileForm
+  },
+  {
+    path:'/ProfileList',
+    component: ProfileList
+  },
+  {
+    path:'/ProfileEdit/:id',
+    component: ProfileEdit
   }
   // To add more pages
 ]
