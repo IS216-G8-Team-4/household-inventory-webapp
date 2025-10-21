@@ -13,15 +13,50 @@ const supabase = createClient(
 const router = useRouter();
 const session = ref(null);
 const showMenu = ref(false);
+const activeProfileId = ref(null); // store the active profile ID
+
+// Function to fetch the current active profile
+const fetchActiveProfile = async () => {
+  if (!session.value) return;
+
+  const userId = session.value.user.id;
+  const { data: households } = await supabase
+    .from("households")
+    .select("id")
+    .eq("created_by", userId)
+    .limit(1);
+
+  const householdId = households?.[0]?.id;
+  if (!householdId) return;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  activeProfileId.value = profile?.id || null;
+};
 
 // Check user session on mount
 onMounted(async () => {
-  const { data } = await supabase.auth.getSession();
-  session.value = data.session;
+  const { data: { session: s } } = await supabase.auth.getSession();
+  session.value = s;
+
+  if (session.value) {
+    await fetchActiveProfile();
+  }
 
   // Watch for auth changes
   supabase.auth.onAuthStateChange((_event, sess) => {
     session.value = sess;
+    if (sess) fetchActiveProfile();
+  });
+
+  // Listen for active profile changes in this tab
+  window.addEventListener("activeProfileChanged", (e) => {
+    activeProfileId.value = e.detail?.newActiveId || null;
   });
 });
 
@@ -32,10 +67,18 @@ const logout = async () => {
   router.push("/login");
 };
 
-// Navigation function
+// Navigation functions
 const goTo = (path) => {
   showMenu.value = false;
   router.push(path);
+};
+
+const goToProfileSettings = () => {
+  if (!activeProfileId.value) {
+    alert("No active profile found.");
+    return;
+  }
+  router.push(`/ProfileEdit/${activeProfileId.value}`);
 };
 
 // Toggle user dropdown
@@ -43,6 +86,7 @@ const toggleMenu = () => {
   showMenu.value = !showMenu.value;
 };
 </script>
+
 
 <template>
   <!-- Bootstrap Navbar -->
@@ -98,8 +142,8 @@ const toggleMenu = () => {
 
             <ul v-show="showMenu"
               class="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-sm border-0">
-              <li><button class="dropdown-item" @click="goTo('/Profile')">👤 View Profile</button></li>
-              <li><button class="dropdown-item" @click="goTo('/Settings')">⚙️ Settings</button></li>
+              <li><button class="dropdown-item" @click="goTo('/ProfileList')">👤 Manage Profiles</button></li>
+              <li><button class="dropdown-item" @click="goToProfileSettings">⚙️ Settings</button></li>
               <li>
                 <hr class="dropdown-divider" />
               </li>
