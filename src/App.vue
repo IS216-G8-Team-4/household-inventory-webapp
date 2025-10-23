@@ -13,9 +13,9 @@ const supabase = createClient(
 const router = useRouter();
 const session = ref(null);
 const showMenu = ref(false);
-const activeProfileId = ref(null); // store the active profile ID
+const activeProfileId = ref(null);
 
-// Function to fetch the current active profile
+// Fetch active profile
 const fetchActiveProfile = async () => {
   if (!session.value) return;
 
@@ -44,30 +44,28 @@ onMounted(async () => {
   const { data: { session: s } } = await supabase.auth.getSession();
   session.value = s;
 
-  if (session.value) {
-    await fetchActiveProfile();
-  }
+  if (session.value) await fetchActiveProfile();
 
-  // Watch for auth changes
+  // Auth change watcher
   supabase.auth.onAuthStateChange((_event, sess) => {
     session.value = sess;
     if (sess) fetchActiveProfile();
   });
 
-  // Listen for active profile changes in this tab
+  // Listen for active profile changes
   window.addEventListener("activeProfileChanged", (e) => {
     activeProfileId.value = e.detail?.newActiveId || null;
   });
 });
 
-// Logout function
+// Logout
 const logout = async () => {
   await supabase.auth.signOut();
   showMenu.value = false;
   router.push("/login");
 };
 
-// Navigation functions
+// Navigation
 const goTo = (path) => {
   showMenu.value = false;
   router.push(path);
@@ -81,20 +79,19 @@ const goToProfileSettings = () => {
   router.push(`/ProfileEdit/${activeProfileId.value}`);
 };
 
-// Toggle user dropdown
+// Toggle dropdown
 const toggleMenu = () => {
   showMenu.value = !showMenu.value;
 };
 </script>
 
-
 <template>
   <!-- Bootstrap Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm sticky-top">
     <div class="container-fluid">
-      <!-- Brand -->
-      <RouterLink class="navbar-brand fw-bold text-success" to="/">
-        Household Inventory
+      <!-- 🌿 Brand (links to Loading page) -->
+      <RouterLink class="navbar-brand eco-brand fw-bold" to="/Loading">
+        Eco Pantry
       </RouterLink>
 
       <!-- Toggler for mobile view -->
@@ -107,20 +104,22 @@ const toggleMenu = () => {
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto align-items-center">
 
+          <!-- Guest-only -->
+          <template v-if="!session">
+            <li class="nav-item">
+              <RouterLink class="nav-link" to="/login">Login</RouterLink>
+            </li>
+          </template>
+
           <!-- Always visible -->
           <li class="nav-item">
-            <RouterLink class="nav-link" to="/Loading">Landing Page</RouterLink>
+            <RouterLink class="nav-link" to="/Donation">Donation</RouterLink>
           </li>
 
-          <!-- Show login only if logged out -->
-          <li v-if="!session" class="nav-item">
-            <RouterLink class="nav-link" to="/login">Login</RouterLink>
-          </li>
-
-          <!-- Protected links (only when logged in) -->
+          <!-- Authenticated-only -->
           <template v-if="session">
             <li class="nav-item">
-              <RouterLink class="nav-link" to="/">Home</RouterLink>
+              <RouterLink class="nav-link" to="/Dashboard">Dashboard</RouterLink>
             </li>
             <li class="nav-item">
               <RouterLink class="nav-link" to="/Inventory">Inventory</RouterLink>
@@ -129,17 +128,13 @@ const toggleMenu = () => {
               <RouterLink class="nav-link" to="/Recipes">Recipes</RouterLink>
             </li>
             <li class="nav-item">
-              <RouterLink class="nav-link" to="/Donation">Donation</RouterLink>
-            </li>
-            <li class="nav-item">
-              <RouterLink class="nav-link" to="/Dashboard">Dashboard</RouterLink>
+              <RouterLink class="nav-link" to="/SubmitDonation">Submit Donation</RouterLink>
             </li>
           </template>
 
-          <!-- 🔹 User Icon Dropdown (only when logged in) -->
+          <!-- User dropdown -->
           <li v-if="session" class="nav-item dropdown position-relative">
             <img src="../assets/user-icon.png" alt="User" class="user-icon" @click="toggleMenu" />
-
             <ul v-show="showMenu"
               class="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-sm border-0">
               <li><button class="dropdown-item" @click="goTo('/ProfileList')">👤 Manage Profiles</button></li>
@@ -155,11 +150,26 @@ const toggleMenu = () => {
     </div>
   </nav>
 
-  <!-- Page content -->
+  <!-- Page Content -->
   <RouterView />
 </template>
 
 <style scoped>
+/* 🌿 Brand color styling */
+.eco-brand {
+  color: #2e7d32 !important;
+  /* deep green */
+  font-size: 1.4rem;
+  letter-spacing: 0.3px;
+  transition: color 0.25s ease;
+}
+
+.eco-brand:hover {
+  color: #1b5e20 !important;
+  /* darker green hover */
+  text-decoration: none;
+}
+
 /* Highlight active route */
 .router-link-active {
   font-weight: 600;
