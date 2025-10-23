@@ -2,31 +2,104 @@
 
 </script>
 
-<script>
-    export default { 
-        data() {
-            return {
-                
-            }
-        }
+<script setup>
+import { ref, onMounted } from 'vue'
+import { createClient } from '@supabase/supabase-js'
+
+const SUPABASE_URL = 'https://mtaoplgrwgihghbdzquk.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10YW9wbGdyd2dpaGdoYmR6cXVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0MTA4NDUsImV4cCI6MjA3NTk4Njg0NX0.qPysjEkDHhy0o6AkyE54tzOELuOZLuLR_G5wKE8ek-w'
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// 🧩 2. Reactive states
+const form = ref({
+  item_name: '',
+  description: '',
+  quantity: 1,
+  image: null
+})
+
+const donations = ref([])
+const location = ref({ lat: null, lng: null })
+
+const handleImageUpload = (e) => {
+  form.value.image = e.target.files[0]
+}
+
+onMounted(async () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      location.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      await fetchDonations()
+    })
+  } else {
+    await fetchDonations()
+  }
+})
+
+const fetchDonations = async () => {
+  const { data, error } = await supabase.from('donations').select('*').order('id', { ascending: false })
+  if (error) console.error(error)
+  donations.value = data || []
+}
+
+const submitDonation = async () => {
+  try {
+    let image_url = null
+
+    if (form.value.image) {
+      const file = form.value.image
+      const fileName = `${Date.now()}-${file.name}`
+      const { data: storageData, error: storageError } = await supabase
+        .storage
+        .from('donation-images')
+        .upload(fileName, file)
+
+      if (storageError) throw storageError
+
+      const { data: publicUrl } = supabase
+        .storage
+        .from('donation-images')
+        .getPublicUrl(fileName)
+      image_url = publicUrl.publicUrl
     }
+
+    const { error } = await supabase.from('donations').insert([
+      {
+        item_name: form.value.item_name,
+        description: form.value.description,
+        quantity: form.value.quantity,
+        image_url,
+        lat: location.value.lat,
+        lng: location.value.lng
+      }
+    ])
+
+    if (error) throw error
+
+    alert('✅ Donation submitted successfully!')
+    form.value = { item_name: '', description: '', quantity: 1, image: null }
+    await fetchDonations()
+  } catch (err) {
+    console.error('Error submitting donation:', err.message)
+    alert('❌ Failed to submit donation.')
+  }
+}
+
+const requestDonation = async (id) => {
+  alert(`Request sent for donation ID ${id}!`)
+}
 </script>
+
+<script setup>
+
+</script>
+
 
 <template>   
 
     <h1>Donation Page</h1>
    
-</template>
 
-<style scope>
-    a {
-        margin: 5px;
-        display: block;
-    }
-</style>
-
-
-<template>
   <div class="container mt-4">
     <h2 class="mb-3">Community Food Sharing</h2>
 
