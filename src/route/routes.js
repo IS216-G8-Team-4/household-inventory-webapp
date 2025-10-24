@@ -13,6 +13,9 @@ import SubmitDonation from "@/components/SubmitDonation.vue";
 import Dashboard from "@/components/Dashboard.vue";
 import Loading from "@/components/Loading.vue";
 import Login from "@/components/login.vue";
+import ProfileEdit from "@/components/ProfileEdit.vue";
+import ProfileForm from "@/components/ProfileForm.vue";
+import ProfileList from "@/components/ProfileList.vue";
 
 // ---- Supabase singleton for guards ----
 const supabase = createClient(
@@ -52,6 +55,9 @@ const routes = [
   { path: "/Recipes", component: Recipes, meta: { requiresAuth: true } },
   { path: "/SubmitDonation", component: SubmitDonation, meta: { requiresAuth: true } },
   { path: "/Main", component: Main, meta: { requiresAuth: true } },
+
+  { path: "/ProfileList", component: ProfileList, meta: { requiresAuth: true } },
+  { path: "/ProfileEdit/:id", component: ProfileEdit, meta: { requiresAuth: true } },
 
   { path: "/:pathMatch(.*)*", redirect: "/Loading" },
 ];
