@@ -24,16 +24,24 @@ const supabase = createClient(
   { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }
 );
 
-// Simple session cache so we don't call getSession on every nav
+// ---- Simple session cache ----
 let cachedSession = null;
+
 async function getSession() {
   if (cachedSession !== null) return cachedSession;
   const { data } = await supabase.auth.getSession();
   cachedSession = data?.session ?? null;
   return cachedSession;
 }
+
+// ---- Listen for auth state changes ----
 supabase.auth.onAuthStateChange((_evt, session) => {
   cachedSession = session ?? null;
+
+  // 🚪 If user logs out, redirect to Loading page
+  if (!session) {
+    router.replace("/Loading");
+  }
 });
 
 // ---- Routes ----
@@ -44,10 +52,10 @@ const routes = [
   { path: "/Loading", component: Loading, meta: { guestOnly: true, hideWhenAuthed: true } },
   { path: "/login", component: Login, meta: { guestOnly: true, hideWhenAuthed: true } },
 
-  // Donation: accessible to everyone (no meta)
-  { path: "/Donation", component: Donation }, // <-- changed
+  // Publicly accessible page
+  { path: "/Donation", component: Donation },
 
-  // App pages (auth required)
+  // Auth-required pages
   { path: "/Dashboard", component: Dashboard, meta: { requiresAuth: true } },
   { path: "/Inventory", component: Inventory, meta: { requiresAuth: true } },
   { path: "/Inventory/Create", component: InventoryCreate, meta: { requiresAuth: true } },
@@ -59,6 +67,7 @@ const routes = [
   { path: "/ProfileList", component: ProfileList, meta: { requiresAuth: true } },
   { path: "/ProfileEdit/:id", component: ProfileEdit, meta: { requiresAuth: true } },
 
+  // Fallback route
   { path: "/:pathMatch(.*)*", redirect: "/Loading" },
 ];
 
@@ -68,21 +77,21 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 });
 
-// ---- Global guard ----
+// ---- Global navigation guard ----
 router.beforeEach(async (to) => {
   const session = await getSession();
 
-  // Block guest-only routes when authed (hide Loading, Login, Donation after login)
+  // 🚫 Redirect logged-in users away from guest-only pages
   if (to.meta?.guestOnly && session) {
     return { path: "/Dashboard" };
   }
 
-  // Protect authed routes
+  // 🔒 Protect pages that require authentication
   if (to.meta?.requiresAuth && !session) {
-    return { path: "/login", query: { next: to.fullPath } };
+    return { path: "/Loading" }; // Redirect guests to Loading page
   }
 
   return true;
 });
 
-export default router;Ï
+export default router;
