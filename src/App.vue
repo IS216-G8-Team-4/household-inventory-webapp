@@ -49,7 +49,12 @@ onMounted(async () => {
   // Auth change watcher
   supabase.auth.onAuthStateChange((_event, sess) => {
     session.value = sess;
-    if (sess) fetchActiveProfile();
+    if (sess) {
+      fetchActiveProfile();
+    } else {
+      // ✅ automatically redirect guest back to Loading
+      router.push("/Loading");
+    }
   });
 
   // Listen for active profile changes
@@ -58,11 +63,21 @@ onMounted(async () => {
   });
 });
 
-// Logout
+// log out 
 const logout = async () => {
-  await supabase.auth.signOut();
-  showMenu.value = false;
-  router.push("/login");
+  try {
+    await supabase.auth.signOut();
+
+    // Clear session-related state
+    session.value = null;
+    activeProfileId.value = null;
+    showMenu.value = false;
+
+    // Force redirect after logout (avoids race condition)
+    router.replace("/Loading");
+  } catch (error) {
+    console.error("Logout failed:", error.message);
+  }
 };
 
 // Navigation
