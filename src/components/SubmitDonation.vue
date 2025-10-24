@@ -155,4 +155,3 @@ const requestDonation = async (id) => {
     </div>
   </div>
 </template>
-</script>
