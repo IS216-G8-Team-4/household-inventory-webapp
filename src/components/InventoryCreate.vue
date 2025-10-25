@@ -1,21 +1,45 @@
 <script setup>
-    // HARDCODED householdId for now. To remove once session is added
-    const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
-
-
-
-    import { ref } from 'vue'
+    import { ref, onMounted} from 'vue'
     import { useRouter } from 'vue-router'
     import { supabase } from '@/lib/supabase.js'
 
     const router = useRouter();
 
+    // Reactive data
     // ref() - Vue.js function that creates a reactive reference
+    const householdId = ref(null)
     const name = ref('');
     const category = ref('');
     const unit = ref('');
     const quantity = ref(0);
     const expiryDate = ref('');
+
+    onMounted(async () => {
+        // Fetch the authenticated user's Household ID
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+            const userId = session.user.id
+
+            // Fetch household_id linked to this user
+            const { data, error } = await supabase
+            .from('households')
+            .select('id')
+            .eq('created_by', userId)
+            .single()
+
+            if (error) {
+            console.error('Error fetching household ID:', error)
+            alert('Unable to fetch your household information. Please try again.')
+            return
+            }
+
+            householdId.value = data.id
+            // console.log('Fetched Household ID:', householdId.value) // Console Log: Household ID
+        } else {
+            alert('You must be logged in to create ingredients.')
+            router.push('/login')
+        }
+    })
 
     async function saveIngredient() {
         try {
@@ -23,7 +47,7 @@
             const { data: existingIngredients, error: fetchError } = await supabase
                 .from('ingredients')
                 .select('*')
-                .eq('household_id', householdId)
+                .eq('household_id', householdId.value)
                 .eq('name', name.value)
 
             if (fetchError) throw fetchError
@@ -35,7 +59,7 @@
                 const { data: newIngredient, error: insertError } = await supabase
                     .from('ingredients')
                     .insert([{
-                        household_id: householdId,
+                        household_id: householdId.value,
                         name: name.value,
                         category: category.value,
                         unit: unit.value
