@@ -1,16 +1,89 @@
 <script setup>
-    // HARDCODED householdId for now. To remove once session is added
-    const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
-
-
-
-    import { ref, onMounted } from 'vue'
+    import { ref, onMounted, watch } from 'vue'
     import { useRouter } from 'vue-router'
     import axios from 'axios'
     import { supabase } from '@/lib/supabase.js' // @ = src directory. @/lib/ = src/lib/)
 
     const router = useRouter()
+    const householdId = ref(null)
+    const inventory = ref([])
+    const myDonations = ref([])
+    const session = ref(null)
 
+    // Fetch current session (get user ID)
+    async function fetchSession() {
+        const { data, error } = await supabase.auth.getSession()
+        if (error) {
+            console.error('Error fetching session:', error)
+            return
+        }
+        session.value = data.session
+    }
+
+    // Fetch householdId based on logged-in user
+    async function fetchHouseholdId() {
+        if (!session.value) return
+
+        const userId = session.value.user.id
+        const { data: households, error } = await supabase
+            .from('households')
+            .select('id')
+            .eq('created_by', userId)
+            .limit(1)
+
+        if (error) {
+            console.error('Error fetching household:', error)
+            return
+        }
+
+        if (households.length > 0) {
+            householdId.value = households[0].id
+        } else {
+            console.warn('No household found for user.')
+        }
+    }
+
+    // Fetch ingredients and batches
+    async function fetchInventory() {
+        if (!householdId.value) return
+
+        const { data: ingredientsData, error: ingredientsError } = await supabase
+            .from('ingredients')
+            .select('*')
+            .eq('household_id', householdId.value)
+
+        if (ingredientsError) {
+            console.error('Error fetching ingredients:', ingredientsError)
+            return
+        }
+
+        const enrichedIngredients = await Promise.all(
+            ingredientsData.map(async (ingredient) => {
+            const { data: batchesData, error: batchesError } = await supabase
+                .from('ingredient_batches')
+                .select('*')
+                .eq('ingredient_id', ingredient.id)
+
+            if (batchesError) {
+                console.error(`Error fetching batches for ${ingredient.name}:`, batchesError)
+                return { ...ingredient, batches: [] }
+            }
+
+            const batches = batchesData.map(batch => ({
+                id: batch.id,
+                quantity: batch.quantity,
+                expiryDate: batch.expiry_date
+            }))
+
+            return { ...ingredient, batches }
+            })
+        )
+
+        inventory.value = enrichedIngredients
+        // console.log('Inventory fetched:', inventory.value) // Console Log: Fetched Ingredients with Batches
+    }
+
+    // Navigation Functions
     function goToCreate() {
         router.push('/Inventory/Create');
     }
@@ -22,7 +95,7 @@
         })
     }
 
-    // Function to calculate days until expiry
+    // Calculate days until expiry
     function timeUntilExpiry(expiryDateStr) { 
         // .setHours(0, 0, 0, 0) = Normalize both dates to midnight local time (The start of the day in local time zone)
         const today = new Date().setHours(0, 0, 0, 0)
@@ -38,58 +111,20 @@
         return `${diffDays} day${diffDays > 1 ? 's' : ''} left`
     }
 
-    const inventory = ref([]) // Hold Supabase data
-
-
-
-    const myDonations = ref([])
-
+    // Load sequence
     onMounted(async () => {
-        // Fetch ingredients for this household
-        const { data: ingredientsData, error: ingredientsError } = await supabase
-            .from('ingredients')
-            .select('*')
-            .eq('household_id', householdId)
-
-        if (ingredientsError) {
-            console.error('Error fetching ingredients:', ingredientsError)
-            return
-        }
-
-        // For each ingredient, fetch its batches
-        const enrichedIngredients = await Promise.all(
-            ingredientsData.map(async (ingredient) => {
-                const { data: batchesData, error: batchesError } = await supabase
-                    .from('ingredient_batches')
-                    .select('*')
-                    .eq('ingredient_id', ingredient.id)
-
-                if (batchesError) {
-                    console.error(`Error fetching batches for ${ingredient.name}:`, batchesError)
-                    return { ...ingredient, batches: [] }
-                }
-
-                // Map batches to match previous structure
-                const batches = batchesData.map(batch => ({
-                    id: batch.id,
-                    quantity: batch.quantity,
-                    expiryDate: batch.expiry_date
-                }))
-
-                return {
-                    ...ingredient,
-                    batches
-                }
-            })
-        )
-
-        inventory.value = enrichedIngredients
-        // console.log('Inventory fetched:', inventory.value) // Console Log: Fetched Ingredients with Batches
-
+        await fetchSession()
+        await fetchHouseholdId()
+        await fetchInventory()
 
 
         const res = await axios.get('http://localhost:3000/api/mydonations?user_id=1')
         myDonations.value = res.data
+    })
+
+    // Auto refresh inventory when householdId changes
+    watch(householdId, (newVal) => {
+        if (newVal) fetchInventory()
     })
 </script>
 
