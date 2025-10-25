@@ -4,6 +4,7 @@
     import axios from 'axios'
     import { supabase } from '@/lib/supabase.js' // @ = src directory. @/lib/ = src/lib/)
 
+    // Reactive data
     const router = useRouter()
     const householdId = ref(null)
     const inventory = ref([])
