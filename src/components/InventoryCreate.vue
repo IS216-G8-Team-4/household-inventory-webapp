@@ -113,83 +113,65 @@
 </script>
 
 <template>   
-    <div class="create-form">
-        <h1>Create New Ingredient</h1>
-        <form @submit.prevent="saveIngredient">
-            <label>Name:</label>
-            <input v-model="name" placeholder="Rice" required />
+    <div class="container mt-5">
+        <h1 class="mb-4 text-center">Create New Ingredient</h1>
+        <form @submit.prevent="saveIngredient" class="mx-auto" style="max-width: 500px;">
+            <div class="mb-3">
+                <label for="name" class="form-label">Name</label>
+                <input id="name" v-model="name" type="text" placeholder="Rice" class="form-control" required />
+            </div>
 
-            <label>Category:</label>
-            <select v-model="category" required>
-                <option disabled value="">Select category</option>
-                <option>Grains & Pasta</option>
-                <option>Dairy & Eggs</option>
-                <option>Meat & Seafood</option>
-                <option>Vegetables</option>
-                <option>Fruits</option>
-                <option>Condiments & Seasonings</option>
-                <option>Canned & Frozen Food</option>
-                <option>Beverages</option>
-                <option>Snacks & Confectionery</option>
-                <option>Baking & Cooking Essentials</option>
-                <option>Others / Miscellaneous</option>
-            </select>
+            <div class="mb-3">
+                <label for="category" class="form-label">Category</label>
+                <select id="category" v-model="category" class="form-select" required>
+                    <option disabled value="">Select category</option>
+                    <option>Grains & Pasta</option>
+                    <option>Dairy & Eggs</option>
+                    <option>Meat & Seafood</option>
+                    <option>Fruits & Vegetables</option>
+                    <option>Condiments & Seasonings</option>
+                    <option>Canned & Frozen Food</option>
+                    <option>Beverages</option>
+                    <option>Snacks & Confectionery</option>
+                    <option>Baking & Cooking Essentials</option>
+                    <option>Others / Miscellaneous</option>
+                </select>
+            </div>
 
-            <label>Unit:</label>
-            <select v-model="unit" required>
-                <option disabled value="">Select unit</option>
-                <optgroup label="Weight">
-                    <option>kg</option>
-                    <option>g</option>
-                </optgroup>
-                <optgroup label="Volume">
-                    <option>L</option>
-                    <option>ml</option>
-                </optgroup>
-                <optgroup label="Count / Pieces">
-                    <option>pcs</option>
-                    <option>pack</option>
-                </optgroup>
-            </select>
+            <div class="mb-3">
+                <label for="unit" class="form-label">Unit</label>
+                <select id="unit" v-model="unit" class="form-select" required>
+                    <option disabled value="">Select unit</option>
+                    <optgroup label="Weight">
+                        <option>kg</option>
+                        <option>g</option>
+                    </optgroup>
+                    <optgroup label="Volume">
+                        <option>L</option>
+                        <option>ml</option>
+                    </optgroup>
+                    <optgroup label="Count / Pieces">
+                        <option>pcs</option>
+                        <option>pack</option>
+                    </optgroup>
+                </select>
+            </div>
 
-            <label>Quantity:</label>
-            <input type="number" v-model="quantity" placeholder="1" required />
+            <div class="mb-3">
+                <label for="quantity" class="form-label">Quantity</label>
+                <input id="quantity" v-model="quantity" type="number" placeholder="1" class="form-control" required />
+            </div>
 
-            <label>Expiry Date:</label>
-            <input type="date" v-model="expiryDate" required />
+            <div class="mb-3">
+                <label for="expiryDate" class="form-label">Expiry Date</label>
+                <input id="expiryDate" v-model="expiryDate" type="date" class="form-control" required />
+            </div>
 
-            <button type="submit">Save</button>
+            <button type="submit" class="btn btn-primary w-100">Save</button>
         </form>
     </div>
 </template>
 
 <style scope>
-    .create-form {
-        max-width: 500px;
-        margin: 0 auto;
-        padding: 20px;
-    }
-    
-    form {
-        display: flex;
-        flex-direction: column;
-    }
 
-    input, select {
-        margin-bottom: 10px;
-        padding: 6px;
-    }
-
-    button {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        padding: 10px;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-
-    button:hover {
-        background-color: #0056b3;
-    }
 </style>
