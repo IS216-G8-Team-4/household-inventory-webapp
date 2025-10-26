@@ -66,6 +66,16 @@ onMounted(async () => {
 // log out 
 const logout = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user && activeProfileId.value) {
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ is_active: false })
+        .eq("id", activeProfileId.value);
+
+      if (updateError) throw updateError;
+    }
     await supabase.auth.signOut();
 
     // Clear session-related state
