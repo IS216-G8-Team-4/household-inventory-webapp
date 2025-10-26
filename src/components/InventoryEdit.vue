@@ -153,120 +153,41 @@
 </script>
 
 <template>   
-    <div class="edit-page">
-        <h1>Edit Ingredient Batch</h1>
+    <div class="container mt-5">
+        <h1 class="mb-4 text-center">Edit Ingredient Batch</h1>
 
-        <div v-if="ingredientExists">
+        <div v-if="ingredientExists" class="mx-auto" style="max-width: 500px;">
             <p><strong>Ingredient:</strong> {{ name }}</p>
             <p><strong>Category:</strong> {{ category }}</p>
             <p><strong>Unit:</strong> {{ unit }}</p>
 
             <form @submit.prevent="saveChanges">
-                <div class="form-group">
-                    <label>Quantity:</label>
-                    <input type="number" v-model="quantity" required />
+                <div class="mb-3">
+                    <label for="quantity" class="form-label">Quantity</label>
+                    <input id="quantity" v-model="quantity" type="number" class="form-control" required />
                 </div>
 
-                <div class="form-group">
-                    <label>Expiry Date:</label>
-                    <input type="date" v-model="expiryDate" required />
+                <div class="mb-3">
+                    <label for="expiryDate" class="form-label">Expiry Date</label>
+                    <input id="expiryDate" v-model="expiryDate" type="date" class="form-control" required />
                 </div>
 
-                <div class="button-group">
-                    <div class="left-buttons">
-                        <button type="submit" class="save-btn">Save Changes</button>
-                        <button type="button" class="cancel-btn" @click="router.push('/Inventory')">Cancel</button>
+                <div class="d-flex justify-content-between">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">Save Changes</button>
+                        <button type="button" class="btn btn-secondary" @click="router.push('/Inventory')">Cancel</button>
                     </div>
-                    <div class="right-buttons">
-                        <button type="button" class="delete-btn" @click="deleteBatch">Delete Batch</button>
-                    </div>
+                    <button type="button" class="btn btn-danger" @click="deleteBatch">Delete Batch</button>
                 </div>
             </form>
         </div>
 
-        <div v-else>
-            <p>Ingredient not found.</p>
+        <div v-else class="text-center">
+        <p>Ingredient not found.</p>
         </div>
     </div>
 </template>
 
 <style scope>
-    .edit-page {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-    }
 
-    .form-group {
-        margin-bottom: 15px;
-    }
-
-    label {
-        display: block;
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-
-    input {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-    }
-
-    .button-group {
-        display: flex;                  /* Put buttons in a row */
-        justify-content: space-between; /* Push left & right buttons apart */
-        align-items: center;
-        margin-top: 20px;               /* Space above buttons */
-    }
-
-    .left-buttons,
-    .right-buttons {
-    display: flex;
-    gap: 10px;                          /* Spacing between buttons in each side */
-    }
-
-    /* Save button */
-    .save-btn {
-        background-color: #28a745;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-        margin-right: 10px;
-    }
-
-    .save-btn:hover {
-        background-color: #218838;
-    }
-
-    /* Cancel button */
-    .cancel-btn {
-        background-color: #6c757d;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-
-    .cancel-btn:hover {
-        background-color: #5a6268;
-    }
-
-    /* Delete button */
-    .delete-btn {
-        background-color: #dc3545;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-
-    .delete-btn:hover {
-        background-color: #c82333;
-    }
 </style>

@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, onMounted, watch } from 'vue'
+    import { ref, onMounted, watch, computed } from 'vue'
     import { useRouter } from 'vue-router'
     import axios from 'axios'
     import { supabase } from '@/lib/supabase.js' // @ = src directory. @/lib/ = src/lib/)
@@ -10,6 +10,31 @@
     const inventory = ref([])
     const myDonations = ref([])
     const session = ref(null)
+
+    // UI states
+    const sortBy = ref('alphabetical')
+    const sortLabel = computed(() => sortBy.value === 'expiry' ? 'Expiring Soon' : 'Alphabetical (A–Z)')
+    const searchQuery = ref('') // Placeholder for upcoming feature
+
+    // Computed: sort logic
+    const sortedInventory = computed(() => {
+        if (sortBy.value === 'alphabetical') {
+            return [...inventory.value].sort((a, b) => a.name.localeCompare(b.name))
+        } else if (sortBy.value === 'expiry') {
+            // Sort by earliest batch expiry date
+            return [...inventory.value].sort((a, b) => {
+                const earliestA = Math.min(...a.batches.map(b => new Date(b.expiryDate)))
+                const earliestB = Math.min(...b.batches.map(b => new Date(b.expiryDate)))
+                return earliestA - earliestB
+            })
+        }
+        return inventory.value
+    })
+
+    // Change sorting method
+    function setSort(type) {
+        sortBy.value = type
+    }
 
     // Fetch current session (get user ID)
     async function fetchSession() {
@@ -60,23 +85,23 @@
 
         const enrichedIngredients = await Promise.all(
             ingredientsData.map(async (ingredient) => {
-            const { data: batchesData, error: batchesError } = await supabase
-                .from('ingredient_batches')
-                .select('*')
-                .eq('ingredient_id', ingredient.id)
+                const { data: batchesData, error: batchesError } = await supabase
+                    .from('ingredient_batches')
+                    .select('*')
+                    .eq('ingredient_id', ingredient.id)
 
-            if (batchesError) {
-                console.error(`Error fetching batches for ${ingredient.name}:`, batchesError)
-                return { ...ingredient, batches: [] }
-            }
+                if (batchesError) {
+                    console.error(`Error fetching batches for ${ingredient.name}:`, batchesError)
+                    return { ...ingredient, batches: [] }
+                }
 
-            const batches = batchesData.map(batch => ({
-                id: batch.id,
-                quantity: batch.quantity,
-                expiryDate: batch.expiry_date
-            }))
+                const batches = batchesData.map(batch => ({
+                    id: batch.id,
+                    quantity: batch.quantity,
+                    expiryDate: batch.expiry_date
+                }))
 
-            return { ...ingredient, batches }
+                return { ...ingredient, batches }
             })
         )
 
@@ -138,74 +163,96 @@
 </script>
 
 <template>   
-    <div class="inventory">
-        <div class="header">
-            <h1>Inventory Page</h1>
-            <button class="create-btn" @click="goToCreate">+ Create Ingredient</button>
+    <div class="inventory container mt-4">
+        <!-- Header & Controls -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Inventory</h1>
+            <button class="btn btn-primary" @click="goToCreate">+ Create Ingredient</button>
         </div>
 
-        <div v-for="item in inventory" :key="item.id" class="ingredient-card">
-            <h2>{{ item.name }}</h2>
-            <p><strong>Category:</strong> {{ item.category }}</p>
-            <p><strong>Unit:</strong> {{ item.unit }}</p>
+        <!-- Menu Bar -->
+        <div class="d-flex gap-3 mb-3 flex-wrap">
+            <!-- Search (placeholder for now) -->
+            <input 
+                type="text" 
+                class="form-control w-auto" 
+                placeholder="Search ingredient..."
+                v-model="searchQuery"
+                style="min-width: 200px;"
+            >
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Quantity</th>
-                        <th>Expiry Date</th>
-                        <th>Expires In</th>
-                        <th class="edit-header"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="batch in item.batches" :key="batch.id">
-                        <td>{{ batch.quantity }}</td>
-                        <td>{{ batch.expiryDate }}</td>
-                        <td>{{ timeUntilExpiry(batch.expiryDate) }}</td>
-                        <td class="edit-cell">
-                            <button class="edit-btn" @click="goToEdit(item.id, batch.id)">Edit</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+            <!-- Filter (placeholder for now) -->
+            <div class="dropdown">
+                <button 
+                    class="btn btn-outline-secondary dropdown-toggle" 
+                    type="button" 
+                    id="filterDropdown" 
+                    data-bs-toggle="dropdown" 
+                    aria-expanded="false">
+                    Filter by Category
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="filterDropdown">
+                    <li><a class="dropdown-item disabled" href="#">Coming soon</a></li>
+                </ul>
+            </div>
 
-    <div class="container mt-4">
-        <h3>My Donations</h3>
-        <div v-if="myDonations.length === 0" class="text-muted">No items donated yet.</div>
-
-        <div v-for="item in myDonations" :key="item.id" class="card mb-3">
-            <div class="card-body">
-                <h5>{{ item.item_name }}</h5>
-                <p>{{ item.description }}</p>
-                <p>Qty: {{ item.quantity }}</p>
-                <p>Status: <strong>{{ item.status }}</strong></p>
+            <!-- Sort Dropdown -->
+            <div class="dropdown">
+                <button 
+                    class="btn btn-outline-secondary dropdown-toggle" 
+                    type="button" 
+                    id="sortDropdown" 
+                    data-bs-toggle="dropdown" 
+                    aria-expanded="false">
+                    Sort: {{ sortLabel }}
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="sortDropdown">
+                    <li><a class="dropdown-item" href="#" @click.prevent="setSort('alphabetical')">Alphabetical (A–Z)</a></li>
+                    <li><a class="dropdown-item" href="#" @click.prevent="setSort('expiry')">Expiring Soon</a></li>
+                </ul>
             </div>
         </div>
-  </div>
+
+        <!-- Inventory Cards -->
+        <div v-for="item in sortedInventory" :key="item.id" class="card mb-3 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">{{ item.name }}</h5>
+                <p class="mb-1"><strong>Category:</strong> {{ item.category }}</p>
+                <p class="mb-1"><strong>Unit:</strong> {{ item.unit }}</p>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mt-2">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Quantity</th>
+                                <th>Expiry Date</th>
+                                <th>Expires In</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="batch in item.batches" :key="batch.id">
+                                <td>{{ batch.quantity }}</td>
+                                <td>{{ batch.expiryDate }}</td>
+                                <td>{{ timeUntilExpiry(batch.expiryDate) }}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-success btn-sm" @click="goToEdit(item.id, batch.id)">Edit</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
    
 </template>
 
 <style scope>
-    a {
-        margin: 5px;
-        display: block;
-    }
-
     .inventory {
         max-width: 800px;
         margin: 0 auto;
         padding: 20px;
-    }
-
-    .ingredient-card {
-        background: #f9f9f9;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     table {
@@ -225,25 +272,6 @@
         background: #eee;
     }
 
-    .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .create-btn {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 8px;
-        cursor: pointer;
-    }
-
-    .create-btn:hover {
-        background-color: #0056b3;
-    }
-
     th.edit-header, 
     td.edit-cell {
         width: 1%;              /* Shrinks as much as possible */
@@ -252,16 +280,4 @@
         text-align: right;
     }
 
-    .edit-btn {
-        background-color: #28a745;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-
-    .edit-btn:hover {
-        background-color: #218838;
-    }
 </style>
