@@ -1,13 +1,11 @@
 <script>
 import { supabase } from '@/lib/supabase.js'
 
-// HARDCODED householdId - IMPORTANT: Update this to match your actual household ID
-const householdId = '21015c91-afee-4798-8966-a86ac5e7625c'
-
 export default {
     data() {
         return {
-            householdId: householdId, // Make it available in the component
+            session: null,          // NEW: Store current session
+            householdId: null,      // Changed from hardcoded to dynamic
             inventory: [],
             expiringIngredients: [],
             recipes: [],
@@ -32,7 +30,18 @@ export default {
             
             dietaryOptions: ['Vegetarian', 'Vegan', 'Seafood', 'Beef', 'Chicken', 'Pork', 'Lamb'],
             
-            selectedRecipe: null
+            selectedRecipe: null,
+            
+            // Use Recipe feature
+            showUseRecipeConfirmation: false,
+            recipeToUse: null,
+            ingredientsToDeduct: [],
+            usingRecipe: false,
+            
+            // Undo feature
+            showUndoNotification: false,
+            undoTimer: null,
+            lastDeduction: null
         }
     },
     
@@ -93,8 +102,58 @@ export default {
     },
     
     methods: {
-        // NEW: Fetch inventory from Supabase
+        // NEW: Fetch current session (get user ID)
+        async fetchSession() {
+            try {
+                const { data, error } = await supabase.auth.getSession()
+                if (error) {
+                    console.error('Error fetching session:', error)
+                    return
+                }
+                this.session = data.session
+            } catch (error) {
+                console.error('Error in fetchSession:', error)
+            }
+        },
+
+        // NEW: Fetch householdId based on logged-in user
+        async fetchHouseholdId() {
+            if (!this.session) {
+                console.warn('No session available')
+                return
+            }
+
+            try {
+                const userId = this.session.user.id
+                const { data: households, error } = await supabase
+                    .from('households')
+                    .select('id')
+                    .eq('created_by', userId)
+                    .limit(1)
+
+                if (error) {
+                    console.error('Error fetching household:', error)
+                    return
+                }
+
+                if (households.length > 0) {
+                    this.householdId = households[0].id
+                    console.log('Household ID fetched:', this.householdId)
+                } else {
+                    console.warn('No household found for user.')
+                }
+            } catch (error) {
+                console.error('Error in fetchHouseholdId:', error)
+            }
+        },
+        
+        // Fetch inventory from Supabase
         async fetchInventory() {
+            if (!this.householdId) {
+                console.warn('No household ID available for fetching inventory')
+                return
+            }
+
             try {
                 console.log('Fetching inventory for household:', this.householdId)
                 
@@ -129,7 +188,7 @@ export default {
                 console.log('Number of items:', this.inventory.length)
                 
                 if (this.inventory.length === 0) {
-                    console.warn('No inventory items found! Check your household_id:', householdId)
+                    console.warn('No inventory items found! Check your household_id:', this.householdId)
                 }
             } catch (error) {
                 console.error('Error fetching inventory:', error)
@@ -137,8 +196,13 @@ export default {
             }
         },
         
-        // NEW: Fetch expiring ingredients (within 7 days)
+        // Fetch expiring ingredients (within 7 days) - Updated to filter by household
         async fetchExpiringIngredients() {
+            if (!this.householdId) {
+                console.warn('No household ID available for fetching expiring ingredients')
+                return
+            }
+
             try {
                 const today = new Date().toISOString().split('T')[0]
                 const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -151,12 +215,14 @@ export default {
                         quantity,
                         expiry_date,
                         status,
-                        ingredient:ingredients (
+                        ingredient:ingredients!inner (
                             id,
                             name,
-                            category
+                            category,
+                            household_id
                         )
                     `)
+                    .eq('ingredient.household_id', this.householdId)
                     .eq('status', 'active')
                     .gte('expiry_date', today)
                     .lte('expiry_date', sevenDaysFromNow)
@@ -211,16 +277,16 @@ export default {
                 const data = await response.json()
                 return data.meals || []
             } catch (error) {
-                console.error('Error fetching recipes:', error)
+                console.error('Error fetching recipes for ingredient:', ingredient, error)
                 return []
             }
         },
         
         // Fetch full recipe details
-        async fetchRecipeDetails(recipeId) {
+        async fetchRecipeDetails(mealId) {
             try {
                 const response = await fetch(
-                    `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${recipeId}`
+                    `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealId}`
                 )
                 const data = await response.json()
                 return data.meals ? data.meals[0] : null
@@ -230,107 +296,78 @@ export default {
             }
         },
         
-        // Search recipes by cuisine
-        async searchByCuisine(cuisine) {
-            try {
-                const response = await fetch(
-                    `https://www.themealdb.com/api/json/v1/1/filter.php?a=${cuisine}`
-                )
-                const data = await response.json()
-                return data.meals || []
-            } catch (error) {
-                console.error('Error searching by cuisine:', error)
-                return []
-            }
-        },
-        
-        // Search recipes by category (dietary preference)
-        async searchByCategory(category) {
-            try {
-                const response = await fetch(
-                    `https://www.themealdb.com/api/json/v1/1/filter.php?c=${category}`
-                )
-                const data = await response.json()
-                return data.meals || []
-            } catch (error) {
-                console.error('Error searching by category:', error)
-                return []
-            }
-        },
-        
-        // Main method to load recipes
+        // Load recipes based on filters
         async loadRecipes() {
             this.loading = true
             this.error = null
             
             try {
-                let recipeIds = new Set()
+                let recipes = []
                 
-                // If filters are applied, use those
+                // If cuisine filter is selected, search by area
                 if (this.filters.cuisine) {
-                    const cuisineRecipes = await this.searchByCuisine(this.filters.cuisine)
-                    cuisineRecipes.forEach(r => recipeIds.add(r.idMeal))
+                    const response = await fetch(
+                        `https://www.themealdb.com/api/json/v1/1/filter.php?a=${this.filters.cuisine}`
+                    )
+                    const data = await response.json()
+                    const basicRecipes = data.meals || []
+                    
+                    // Fetch details for each recipe
+                    const detailPromises = basicRecipes.slice(0, 20).map(recipe => 
+                        this.fetchRecipeDetails(recipe.idMeal)
+                    )
+                    recipes = await Promise.all(detailPromises)
+                    recipes = recipes.filter(r => r !== null)
+                    
                 } else if (this.filters.dietaryPreference) {
-                    const categoryRecipes = await this.searchByCategory(this.filters.dietaryPreference)
-                    categoryRecipes.forEach(r => recipeIds.add(r.idMeal))
+                    const response = await fetch(
+                        `https://www.themealdb.com/api/json/v1/1/filter.php?c=${this.filters.dietaryPreference}`
+                    )
+                    const data = await response.json()
+                    const basicRecipes = data.meals || []
+                    
+                    const detailPromises = basicRecipes.slice(0, 20).map(recipe => 
+                        this.fetchRecipeDetails(recipe.idMeal)
+                    )
+                    recipes = await Promise.all(detailPromises)
+                    recipes = recipes.filter(r => r !== null)
+                    
                 } else {
-                    // Always search using all inventory (not just expiring)
-                    // We'll filter for expiring ingredients after getting all recipes
-                    const topIngredients = this.inventory.slice(0, 5)
+                    // Use available ingredients to find recipes
+                    const recipeMap = new Map()
                     
-                    console.log('Searching recipes for ingredients:', topIngredients.map(i => i.name))
-                    
-                    if (topIngredients.length === 0) {
-                        console.warn('No ingredients to search! Inventory is empty.')
-                        this.error = 'No ingredients in inventory. Please add some ingredients first.'
-                        this.loading = false
-                        return
+                    // Search for recipes with each available ingredient
+                    for (const ingredient of this.availableIngredients.slice(0, 5)) {
+                        const foundRecipes = await this.fetchRecipesByIngredient(ingredient)
+                        for (const recipe of foundRecipes.slice(0, 10)) {
+                            if (!recipeMap.has(recipe.idMeal)) {
+                                const details = await this.fetchRecipeDetails(recipe.idMeal)
+                                if (details) {
+                                    recipeMap.set(recipe.idMeal, details)
+                                }
+                            }
+                        }
                     }
                     
-                    for (const item of topIngredients) {
-                        console.log(`Fetching recipes for: ${item.name}`)
-                        const recipes = await this.fetchRecipesByIngredient(item.name)
-                        console.log(`Found ${recipes.length} recipes for ${item.name}`)
-                        recipes.forEach(r => recipeIds.add(r.idMeal))
-                    }
-                    
-                    console.log(`Total unique recipe IDs found: ${recipeIds.size}`)
+                    recipes = Array.from(recipeMap.values())
                 }
                 
-                // Fetch full details for each recipe
-                const detailedRecipes = []
-                const recipeIdArray = Array.from(recipeIds).slice(0, 20)
-                
-                for (const id of recipeIdArray) {
-                    const details = await this.fetchRecipeDetails(id)
-                    if (details) {
-                        detailedRecipes.push(details)
-                    }
-                }
-                
-                this.recipes = detailedRecipes
+                this.recipes = recipes
                 this.applyFilters()
                 
             } catch (error) {
-                this.error = 'Failed to load recipes. Please try again.'
                 console.error('Error loading recipes:', error)
+                this.error = 'Failed to load recipes'
             } finally {
                 this.loading = false
             }
         },
         
-        // Apply filters to recipes
+        // Apply client-side filters
         applyFilters() {
             let filtered = this.recipesWithMatch
             
-            // NEW: Filter to only show recipes with expiring ingredients
-            if (this.filters.useExpiringOnly) {
-                filtered = filtered.filter(recipe => 
-                    recipe.expiringMatchedIngredients.length > 0
-                )
-            }
-            
-            // Filter by search query
+            // Search filter
             if (this.filters.searchQuery) {
                 const query = this.filters.searchQuery.toLowerCase()
                 filtered = filtered.filter(recipe => 
@@ -338,11 +375,36 @@ export default {
                 )
             }
             
+            // Time filter
+            if (this.filters.maxTime) {
+                // Note: API doesn't provide cooking time, so this is a placeholder
+                // You might want to estimate based on complexity or skip this
+            }
+            
+            // NEW: Expiring ingredients filter
+            if (this.filters.useExpiringOnly) {
+                filtered = filtered.filter(recipe => 
+                    recipe.expiringMatchedIngredients.length > 0
+                )
+            }
+            
             this.filteredRecipes = filtered
         },
         
-        // View recipe details
-        viewRecipe(recipe) {
+        // Clear all filters
+        clearFilters() {
+            this.filters = {
+                cuisine: '',
+                maxTime: '',
+                dietaryPreference: '',
+                searchQuery: '',
+                useExpiringOnly: false
+            }
+            this.applyFilters()
+        },
+        
+        // Show recipe details in modal
+        showRecipeDetails(recipe) {
             this.selectedRecipe = recipe
         },
         
@@ -351,257 +413,750 @@ export default {
             this.selectedRecipe = null
         },
         
-        // Get match color class
-        getMatchColorClass(percentage) {
+        // Get match badge class based on percentage
+        getMatchClass(percentage) {
             if (percentage >= 80) return 'match-excellent'
             if (percentage >= 60) return 'match-good'
             if (percentage >= 40) return 'match-fair'
             return 'match-low'
         },
         
-        // NEW: Check if an ingredient is expiring
+        // Check if ingredient is available in inventory
+        isIngredientAvailable(ingredientName) {
+            return this.availableIngredients.some(avail => 
+                avail.includes(ingredientName.toLowerCase()) || 
+                ingredientName.toLowerCase().includes(avail)
+            )
+        },
+        
+        // NEW: Check if ingredient is expiring
         isIngredientExpiring(ingredientName) {
             return this.expiringIngredientNames.some(expiring =>
-                expiring.includes(ingredientName.toLowerCase()) || 
+                expiring.includes(ingredientName.toLowerCase()) ||
                 ingredientName.toLowerCase().includes(expiring)
             )
+        },
+        
+        // NEW: Prepare to use recipe - show confirmation
+        async prepareUseRecipe(recipe) {
+            this.recipeToUse = recipe
+            this.ingredientsToDeduct = []
+            
+            // Extract recipe ingredients and match with inventory
+            const recipeIngredients = this.extractRecipeIngredients(recipe)
+            
+            for (let i = 0; i < recipeIngredients.length; i++) {
+                const ingredientName = recipeIngredients[i]
+                const measure = this.getIngredientMeasure(recipe, i + 1)
+                
+                // Find matching inventory item
+                const inventoryItem = this.inventory.find(item => 
+                    item.name.toLowerCase().includes(ingredientName.toLowerCase()) ||
+                    ingredientName.toLowerCase().includes(item.name.toLowerCase())
+                )
+                
+                // Extract quantity and unit from recipe measure
+                const quantityMatch = measure.match(/(\d+\.?\d*)/)
+                const quantity = quantityMatch ? parseFloat(quantityMatch[1]) : 1
+                
+                // Extract unit from measure (everything after the number)
+                const recipeUnit = measure.replace(/[\d\.\s]+/, '').trim().toLowerCase()
+                const inventoryUnit = inventoryItem ? inventoryItem.unit.toLowerCase() : ''
+                
+                // Check if units match or are compatible
+                const unitMatch = this.checkUnitCompatibility(recipeUnit, inventoryUnit)
+                
+                const isExpiring = inventoryItem ? this.isIngredientExpiring(inventoryItem.name) : false
+                
+                this.ingredientsToDeduct.push({
+                    name: ingredientName,
+                    measure: measure,
+                    recipeUnit: recipeUnit,
+                    quantity: quantity,
+                    editableQuantity: quantity, // For user to edit
+                    available: !!inventoryItem,
+                    inventoryItem: inventoryItem,
+                    inventoryUnit: inventoryUnit,
+                    unitMatch: unitMatch,
+                    checked: !!inventoryItem, // Auto-check if available
+                    isExpiring: isExpiring
+                })
+            }
+            
+            // Sort: Expiring first, then available, then missing
+            this.ingredientsToDeduct.sort((a, b) => {
+                if (a.isExpiring && !b.isExpiring) return -1
+                if (!a.isExpiring && b.isExpiring) return 1
+                if (a.available && !b.available) return -1
+                if (!a.available && b.available) return 1
+                return 0
+            })
+            
+            this.showUseRecipeConfirmation = true
+        },
+        
+        // NEW: Check if recipe unit and inventory unit are compatible
+        checkUnitCompatibility(recipeUnit, inventoryUnit) {
+            if (!recipeUnit || !inventoryUnit) return 'unknown'
+            
+            // Exact match
+            if (recipeUnit === inventoryUnit) return 'exact'
+            
+            // Weight units
+            const weightUnits = ['kg', 'g', 'gram', 'grams', 'kilogram', 'kilograms', 'oz', 'lb', 'lbs', 'pound', 'pounds', 'ounce', 'ounces']
+            const isRecipeWeight = weightUnits.some(u => recipeUnit.includes(u))
+            const isInventoryWeight = weightUnits.some(u => inventoryUnit.includes(u))
+            if (isRecipeWeight && isInventoryWeight) return 'compatible'
+            
+            // Volume units
+            const volumeUnits = ['l', 'ml', 'liter', 'liters', 'milliliter', 'milliliters', 'cup', 'cups', 'tbsp', 'tsp', 'tablespoon', 'teaspoon', 'fl oz', 'fluid ounce']
+            const isRecipeVolume = volumeUnits.some(u => recipeUnit.includes(u))
+            const isInventoryVolume = volumeUnits.some(u => inventoryUnit.includes(u))
+            if (isRecipeVolume && isInventoryVolume) return 'compatible'
+            
+            // Count units
+            const countUnits = ['pcs', 'pc', 'piece', 'pieces', 'pack', 'packs', 'item', 'items', 'unit', 'units']
+            const isRecipeCount = countUnits.some(u => recipeUnit.includes(u))
+            const isInventoryCount = countUnits.some(u => inventoryUnit.includes(u))
+            if (isRecipeCount && isInventoryCount) return 'compatible'
+            
+            // No unit in recipe (just a number)
+            if (!recipeUnit || recipeUnit === '') return 'compatible'
+            
+            // Mismatch
+            return 'mismatch'
+        },
+        
+        // NEW: Cancel use recipe
+        cancelUseRecipe() {
+            this.showUseRecipeConfirmation = false
+            this.recipeToUse = null
+            this.ingredientsToDeduct = []
+        },
+        
+        // NEW: Confirm and use recipe - deduct from inventory
+        async confirmUseRecipe() {
+            this.usingRecipe = true
+            
+            try {
+                const deductionRecord = {
+                    recipeId: this.recipeToUse.idMeal,
+                    recipeName: this.recipeToUse.strMeal,
+                    timestamp: new Date().toISOString(),
+                    deductions: []
+                }
+                
+                // Deduct only checked and available ingredients
+                for (const ingredient of this.ingredientsToDeduct) {
+                    if (ingredient.checked && ingredient.available && ingredient.inventoryItem) {
+                        // Use the edited quantity instead of original
+                        const deduction = await this.deductIngredientFromInventory(
+                            ingredient.inventoryItem,
+                            ingredient.editableQuantity
+                        )
+                        if (deduction) {
+                            deductionRecord.deductions.push(deduction)
+                        }
+                    }
+                }
+                
+                // Store for undo
+                this.lastDeduction = deductionRecord
+                
+                // Refresh inventory
+                await this.fetchInventory()
+                await this.fetchExpiringIngredients()
+                
+                // Close confirmation and recipe modal
+                this.showUseRecipeConfirmation = false
+                this.closeRecipeModal()
+                
+                // Show undo notification
+                this.showUndoNotification = true
+                
+                // Auto-hide after 5 seconds
+                if (this.undoTimer) clearTimeout(this.undoTimer)
+                this.undoTimer = setTimeout(() => {
+                    this.showUndoNotification = false
+                    this.lastDeduction = null
+                }, 5000)
+                
+            } catch (error) {
+                console.error('Error using recipe:', error)
+                alert('Failed to use recipe. Please try again.')
+            } finally {
+                this.usingRecipe = false
+            }
+        },
+        
+        // NEW: Deduct ingredient from inventory (FIFO - oldest expiry first)
+        async deductIngredientFromInventory(inventoryItem, quantityNeeded) {
+            try {
+                // Sort batches by expiry date (oldest first)
+                const sortedBatches = [...inventoryItem.batches]
+                    .filter(batch => batch.status === 'active' || !batch.status)
+                    .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))
+                
+                let remainingQuantity = quantityNeeded
+                const batchUpdates = []
+                
+                for (const batch of sortedBatches) {
+                    if (remainingQuantity <= 0) break
+                    
+                    const currentQuantity = parseFloat(batch.quantity)
+                    
+                    if (currentQuantity > 0) {
+                        const deductAmount = Math.min(currentQuantity, remainingQuantity)
+                        const newQuantity = currentQuantity - deductAmount
+                        
+                        // Update batch in database
+                        const { error } = await supabase
+                            .from('ingredient_batches')
+                            .update({ 
+                                quantity: newQuantity,
+                                status: newQuantity <= 0 ? 'depleted' : 'active'
+                            })
+                            .eq('id', batch.id)
+                        
+                        if (error) throw error
+                        
+                        // Record for undo
+                        batchUpdates.push({
+                            batchId: batch.id,
+                            previousQuantity: currentQuantity,
+                            deductedAmount: deductAmount,
+                            newQuantity: newQuantity,
+                            previousStatus: batch.status || 'active'
+                        })
+                        
+                        remainingQuantity -= deductAmount
+                    }
+                }
+                
+                return {
+                    ingredientId: inventoryItem.id,
+                    ingredientName: inventoryItem.name,
+                    totalDeducted: quantityNeeded - remainingQuantity,
+                    batchUpdates: batchUpdates
+                }
+                
+            } catch (error) {
+                console.error('Error deducting ingredient:', error)
+                return null
+            }
+        },
+        
+        // NEW: Undo recipe use
+        async undoRecipeUse() {
+            if (!this.lastDeduction) return
+            
+            try {
+                // Restore all deductions
+                for (const deduction of this.lastDeduction.deductions) {
+                    for (const batchUpdate of deduction.batchUpdates) {
+                        // Restore previous quantity and status
+                        const { error } = await supabase
+                            .from('ingredient_batches')
+                            .update({ 
+                                quantity: batchUpdate.previousQuantity,
+                                status: batchUpdate.previousStatus
+                            })
+                            .eq('id', batchUpdate.batchId)
+                        
+                        if (error) throw error
+                    }
+                }
+                
+                // Refresh inventory
+                await this.fetchInventory()
+                await this.fetchExpiringIngredients()
+                
+                // Hide notification
+                this.showUndoNotification = false
+                this.lastDeduction = null
+                
+                // Clear timer
+                if (this.undoTimer) {
+                    clearTimeout(this.undoTimer)
+                    this.undoTimer = null
+                }
+                
+                alert('Recipe use has been undone successfully!')
+                
+            } catch (error) {
+                console.error('Error undoing recipe use:', error)
+                alert('Failed to undo. Please check your inventory manually.')
+            }
+        },
+        
+        // NEW: Dismiss undo notification
+        dismissUndo() {
+            this.showUndoNotification = false
+            this.lastDeduction = null
+            if (this.undoTimer) {
+                clearTimeout(this.undoTimer)
+                this.undoTimer = null
+            }
         }
     },
     
+    watch: {
+        // Watch filters and reapply when changed
+        filters: {
+            handler() {
+                this.applyFilters()
+            },
+            deep: true
+        },
+        
+        // NEW: Watch householdId and fetch data when it changes
+        householdId(newVal) {
+            if (newVal) {
+                this.fetchInventory()
+                this.fetchExpiringIngredients()
+            }
+        }
+    },
+    
+    // Modified: Load data in sequence
     async mounted() {
-        await this.fetchInventory()
-        await this.fetchExpiringIngredients()
-        await this.loadRecipes()
+        // Fetch session first
+        await this.fetchSession()
+        
+        // Then fetch household ID
+        await this.fetchHouseholdId()
+        
+        // Then fetch inventory and expiring ingredients
+        if (this.householdId) {
+            await this.fetchInventory()
+            await this.fetchExpiringIngredients()
+            await this.loadRecipes()
+        } else {
+            console.error('Unable to load recipes: No household ID available')
+            this.error = 'Unable to load your household data. Please make sure you have a household set up.'
+        }
+    },
+    
+    // NEW: Cleanup timer on component destroy
+    beforeUnmount() {
+        if (this.undoTimer) {
+            clearTimeout(this.undoTimer)
+        }
     }
 }
 </script>
 
 <template>
     <div class="recipes-container">
+        <!-- Header -->
         <div class="recipes-header">
-            <h1>Recipe Recommendations</h1>
-            <p class="subtitle">Recipes matched to your available ingredients</p>
+            <h1>Recipe Suggestions</h1>
+            <p class="subtitle">Based on your available ingredients</p>
             
-            <!-- NEW: Expiring ingredients alert -->
+            <!-- NEW: Show expiring ingredients alert if any -->
             <div v-if="expiringIngredients.length > 0" class="expiring-alert">
-                <strong>⚠️ {{ expiringIngredients.length }} ingredient(s) expiring soon:</strong>
-                {{ expiringIngredients.map(i => i.name).join(', ') }}
-            </div>
-            <div v-else-if="inventory.length > 0" class="alert alert-success mt-3" style="display: inline-block;">
-                <strong>✅ Great news!</strong> No ingredients expiring in the next 7 days.
+                <strong>⚠️ {{ expiringIngredients.length }} ingredient(s) expiring soon!</strong>
+                <ul style="margin: 8px 0 0 20px; padding: 0;">
+                    <li v-for="(item, index) in expiringIngredients" :key="item.id">
+                        {{ item.name }}
+                    </li>
+                </ul>
             </div>
         </div>
-        
+
         <!-- Filters Section -->
         <div class="filters-section">
+            <h3>Filter Recipes</h3>
+            
             <div class="row g-3">
-                <div class="col-md-3">
+                <!-- Search -->
+                <div class="col-md-6">
+                    <label class="form-label">Search by name</label>
                     <input 
-                        v-model="filters.searchQuery"
-                        @input="applyFilters"
                         type="text" 
                         class="form-control" 
-                        placeholder="Search recipes...">
+                        v-model="filters.searchQuery"
+                        placeholder="e.g., Pasta, Chicken..."
+                    >
                 </div>
-                
-                <div class="col-md-2">
-                    <select 
-                        v-model="filters.cuisine"
-                        @change="loadRecipes"
-                        class="form-select">
+
+                <!-- Cuisine -->
+                <div class="col-md-6">
+                    <label class="form-label">Cuisine</label>
+                    <select class="form-select" v-model="filters.cuisine" @change="loadRecipes">
                         <option value="">All Cuisines</option>
                         <option v-for="cuisine in cuisines" :key="cuisine" :value="cuisine">
                             {{ cuisine }}
                         </option>
                     </select>
                 </div>
-                
-                <div class="col-md-2">
-                    <select 
-                        v-model="filters.dietaryPreference"
-                        @change="loadRecipes"
-                        class="form-select">
-                        <option value="">All Categories</option>
+
+                <!-- Dietary Preference -->
+                <div class="col-md-6">
+                    <label class="form-label">Dietary Preference</label>
+                    <select class="form-select" v-model="filters.dietaryPreference" @change="loadRecipes">
+                        <option value="">All Types</option>
                         <option v-for="diet in dietaryOptions" :key="diet" :value="diet">
                             {{ diet }}
                         </option>
                     </select>
                 </div>
-                
-                <!-- NEW: Expiring ingredients filter -->
-                <div class="col-md-3">
-                    <div class="form-check" style="padding-top: 8px;">
+
+                <!-- Max Cooking Time -->
+                <div class="col-md-6">
+                    <label class="form-label">Max Cooking Time (minutes)</label>
+                    <input 
+                        type="number" 
+                        class="form-control" 
+                        v-model="filters.maxTime"
+                        placeholder="e.g., 30"
+                        min="0"
+                    >
+                </div>
+
+                <!-- NEW: Expiring Ingredients Only -->
+                <div class="col-12">
+                    <div class="form-check">
                         <input 
-                            v-model="filters.useExpiringOnly"
-                            @change="loadRecipes"
                             class="form-check-input" 
                             type="checkbox" 
-                            id="expiringFilter">
-                        <label class="form-check-label" for="expiringFilter">
-                            🔥 Use expiring ingredients only
+                            id="expiringOnly"
+                            v-model="filters.useExpiringOnly"
+                        >
+                        <label class="form-check-label" for="expiringOnly">
+                            <strong>Show only recipes using expiring ingredients</strong>
                         </label>
                     </div>
                 </div>
-                
-                <div class="col-md-2">
-                    <button 
-                        @click="loadRecipes" 
-                        class="btn btn-primary w-100"
-                        :disabled="loading">
-                        <span v-if="loading">Loading...</span>
-                        <span v-else>Refresh</span>
-                    </button>
-                </div>
+            </div>
+
+            <div class="mt-3">
+                <button class="btn btn-secondary" @click="clearFilters">Clear Filters</button>
+                <button class="btn btn-primary ms-2" @click="loadRecipes">Refresh Recipes</button>
             </div>
         </div>
-        
+
         <!-- Loading State -->
         <div v-if="loading" class="text-center my-5">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
-            <p class="mt-3">Finding the best recipes for you...</p>
+            <p class="mt-3">Finding delicious recipes...</p>
         </div>
-        
+
         <!-- Error State -->
-        <div v-if="error" class="alert alert-danger" role="alert">
+        <div v-if="error" class="alert alert-danger">
             {{ error }}
         </div>
-        
+
         <!-- Recipes Grid -->
-        <div v-if="!loading && filteredRecipes.length > 0" class="recipes-grid">
+        <div v-if="!loading && !error" class="recipes-grid">
             <div 
                 v-for="recipe in filteredRecipes" 
-                :key="recipe.idMeal" 
+                :key="recipe.idMeal"
                 class="recipe-card"
-                @click="viewRecipe(recipe)">
-                
+                @click="showRecipeDetails(recipe)"
+            >
                 <div class="recipe-image-container">
                     <img :src="recipe.strMealThumb" :alt="recipe.strMeal" class="recipe-image">
-                    <div class="match-badge" :class="getMatchColorClass(recipe.matchPercentage)">
+                    
+                    <!-- Match Badge -->
+                    <div class="match-badge" :class="getMatchClass(recipe.matchPercentage)">
                         {{ recipe.matchPercentage }}% Match
                     </div>
-                    <!-- NEW: Show expiring ingredients badge -->
+                    
+                    <!-- NEW: Expiring Ingredients Badge -->
                     <div v-if="recipe.expiringMatchedIngredients.length > 0" class="expiring-badge">
-                        🔥 {{ recipe.expiringMatchedIngredients.length }} expiring
+                        ⏰ Uses {{ recipe.expiringMatchedIngredients.length }} expiring
                     </div>
                 </div>
-                
+
                 <div class="recipe-content">
-                    <h3 class="recipe-title">{{ recipe.strMeal }}</h3>
+                    <h4 class="recipe-title">{{ recipe.strMeal }}</h4>
                     
                     <div class="recipe-meta">
-                        <span class="badge bg-secondary">{{ recipe.strCategory }}</span>
                         <span class="badge bg-info">{{ recipe.strArea }}</span>
+                        <span class="badge bg-secondary">{{ recipe.strCategory }}</span>
                     </div>
-                    
+
                     <div class="ingredient-summary">
                         <p class="mb-1">
-                            <strong>{{ recipe.matchedIngredients.length }}</strong> of 
-                            <strong>{{ recipe.totalIngredients }}</strong> ingredients available
+                            <strong>✓ {{ recipe.matchedIngredients.length }}</strong> / 
+                            {{ recipe.totalIngredients }} ingredients available
                         </p>
                         
                         <!-- NEW: Show expiring ingredients -->
                         <div v-if="recipe.expiringMatchedIngredients.length > 0" class="expiring-ingredients">
-                            <small class="text-danger">
-                                <strong>Expiring:</strong> {{ recipe.expiringMatchedIngredients.join(', ') }}
+                            <small>
+                                <strong>⏰ Expiring soon:</strong>
+                                {{ recipe.expiringMatchedIngredients.join(', ') }}
                             </small>
                         </div>
                         
                         <div v-if="recipe.missingIngredients.length > 0" class="missing-ingredients">
                             <small class="text-muted">
-                                Missing: {{ recipe.missingIngredients.slice(0, 3).join(', ') }}
-                                <span v-if="recipe.missingIngredients.length > 3">
-                                    +{{ recipe.missingIngredients.length - 3 }} more
-                                </span>
+                                <strong>Missing:</strong> {{ recipe.missingIngredients.slice(0, 3).join(', ') }}
+                                <span v-if="recipe.missingIngredients.length > 3">...</span>
                             </small>
                         </div>
                     </div>
-                    
-                    <button class="btn btn-outline-primary btn-sm w-100 mt-2">
-                        View Recipe
-                    </button>
+                </div>
+            </div>
+
+            <!-- No Results -->
+            <div v-if="filteredRecipes.length === 0" class="col-12 text-center my-5">
+                <p class="text-muted">No recipes found matching your criteria.</p>
+                <button class="btn btn-primary" @click="clearFilters">Clear Filters</button>
+            </div>
+        </div>
+
+        <!-- Recipe Detail Modal -->
+        <div v-if="selectedRecipe" class="recipe-modal" @click.self="closeRecipeModal">
+            <div class="recipe-modal-content recipe-detail-modal-styled">
+                <button class="btn-close-modal" @click="closeRecipeModal">&times;</button>
+                
+                <div class="recipe-detail-layout-styled">
+                    <!-- Left Side: Recipe Image with Info Cards -->
+                    <div class="recipe-detail-left">
+                        <div class="recipe-image-wrapper">
+                            <img 
+                                :src="selectedRecipe.strMealThumb" 
+                                :alt="selectedRecipe.strMeal" 
+                                class="detail-recipe-image-styled"
+                            >
+                        </div>
+                        
+                        <!-- Match Badge Card -->
+                        <div class="match-card" :class="getMatchClass(selectedRecipe.matchPercentage)">
+                            <div class="match-percentage">{{ selectedRecipe.matchPercentage }}%</div>
+                            <div class="match-text">Ingredient Match</div>
+                        </div>
+                        
+                        <!-- Expiring Ingredients Card -->
+                        <div v-if="selectedRecipe.expiringMatchedIngredients.length > 0" class="expiring-card">
+                            <div class="expiring-icon">🔥</div>
+                            <div class="expiring-text">
+                                <strong>Expiring Ingredients</strong>
+                                <p>{{ selectedRecipe.expiringMatchedIngredients.join(', ') }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Side: Ingredients & Instructions -->
+                    <div class="recipe-detail-right">
+                        <div class="recipe-title-section">
+                            <h2 class="recipe-modal-title">{{ selectedRecipe.strMeal }}</h2>
+                            <div class="recipe-modal-badges">
+                                <span class="badge bg-secondary">{{ selectedRecipe.strCategory }}</span>
+                                <span class="badge bg-info">{{ selectedRecipe.strArea }}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="recipe-scrollable-content">
+                            <h4 class="section-heading">Ingredients</h4>
+                            <ul class="ingredients-list-styled">
+                                <li 
+                                    v-for="(ingredient, index) in extractRecipeIngredients(selectedRecipe)" 
+                                    :key="index"
+                                    class="ingredient-item-styled"
+                                    :class="{
+                                        'ingredient-available-styled': isIngredientAvailable(ingredient) && !isIngredientExpiring(ingredient),
+                                        'ingredient-expiring-styled': isIngredientExpiring(ingredient),
+                                        'ingredient-missing-styled': !isIngredientAvailable(ingredient)
+                                    }"
+                                >
+                                    <span class="ingredient-check-icon">
+                                        {{ isIngredientExpiring(ingredient) ? '✓ 🔥' : 
+                                           isIngredientAvailable(ingredient) ? '✓' : '✗' }}
+                                    </span>
+                                    <span class="ingredient-text-styled">
+                                        {{ getIngredientMeasure(selectedRecipe, index + 1) }} {{ ingredient }}
+                                    </span>
+                                </li>
+                            </ul>
+
+                            <h4 class="section-heading">Instructions</h4>
+                            <div class="instructions-styled">
+                                {{ selectedRecipe.strInstructions }}
+                            </div>
+                            
+                            <!-- Buttons at Bottom - Centered Inside Scroll -->
+                            <div class="recipe-modal-actions-centered">
+                                <a v-if="selectedRecipe.strYoutube" 
+                                   :href="selectedRecipe.strYoutube" 
+                                   target="_blank" 
+                                   class="btn btn-video-red">
+                                    <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                    </svg>
+                                    Watch Video Tutorial
+                                </a>
+                                <button class="btn btn-use-recipe-green" @click="prepareUseRecipe(selectedRecipe)">
+                                    Use This Recipe
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        
-        <!-- No Results -->
-        <div v-if="!loading && filteredRecipes.length === 0" class="text-center my-5">
-            <div v-if="filters.useExpiringOnly && expiringIngredients.length === 0" class="alert alert-info">
-                <h5>No expiring ingredients found! 🎉</h5>
-                <p>You don't have any ingredients expiring in the next 7 days.</p>
-                <p class="mb-0">Uncheck "Use expiring ingredients only" to see all recipes based on your inventory.</p>
-            </div>
-            <div v-else-if="filters.useExpiringOnly && expiringIngredients.length > 0" class="alert alert-warning">
-                <h5>No recipes found with expiring ingredients</h5>
-                <p class="mb-0">Try unchecking the filter to see more recipe options.</p>
-            </div>
-            <p v-else class="text-muted">No recipes found. Try adjusting your filters or adding more ingredients to your inventory.</p>
-        </div>
-        
-        <!-- Recipe Detail Modal -->
-        <div v-if="selectedRecipe" class="recipe-modal" @click.self="closeRecipeModal">
-            <div class="recipe-modal-content">
-                <button class="btn-close-modal" @click="closeRecipeModal">&times;</button>
+
+        <!-- Use Recipe Confirmation Modal - PRETTIER STYLING -->
+        <div v-if="showUseRecipeConfirmation" class="recipe-modal" @click.self="cancelUseRecipe">
+            <div class="recipe-modal-content use-recipe-modal-new">
+                <button class="btn-close-modal" @click="cancelUseRecipe">&times;</button>
                 
-                <div class="row">
-                    <div class="col-md-5">
-                        <img 
-                            :src="selectedRecipe.strMealThumb" 
-                            :alt="selectedRecipe.strMeal" 
-                            class="recipe-detail-image">
-                        
-                        <div class="match-detail" :class="getMatchColorClass(selectedRecipe.matchPercentage)">
-                            <h4>{{ selectedRecipe.matchPercentage }}% Ingredient Match</h4>
+                <div v-if="recipeToUse" class="recipe-confirmation-layout-new">
+                    <!-- Header Section -->
+                    <div class="confirmation-header">
+                        <div class="confirmation-title-section">
+                            <h2 class="confirmation-recipe-name">{{ recipeToUse.strMeal }}</h2>
+                            <div class="confirmation-badges">
+                                <span class="badge bg-secondary">{{ recipeToUse.strCategory }}</span>
+                                <span class="badge bg-info">{{ recipeToUse.strArea }}</span>
+                            </div>
                         </div>
-                        
-                        <!-- NEW: Show expiring ingredients in modal -->
-                        <div v-if="selectedRecipe.expiringMatchedIngredients.length > 0" 
-                             class="expiring-detail">
-                            <h5>🔥 Expiring Ingredients</h5>
-                            <p>{{ selectedRecipe.expiringMatchedIngredients.join(', ') }}</p>
+                        <div class="confirmation-image-wrapper">
+                            <img :src="recipeToUse.strMealThumb" :alt="recipeToUse.strMeal" class="confirmation-recipe-image-small">
                         </div>
                     </div>
                     
-                    <div class="col-md-7">
-                        <h2>{{ selectedRecipe.strMeal }}</h2>
-                        
-                        <div class="recipe-badges mb-3">
-                            <span class="badge bg-secondary me-2">{{ selectedRecipe.strCategory }}</span>
-                            <span class="badge bg-info">{{ selectedRecipe.strArea }}</span>
+                    <!-- Match Info Card -->
+                    <div class="match-info-card">
+                        <div class="match-percentage-new" :class="getMatchClass(recipeToUse.matchPercentage)">
+                            <div class="match-circle">
+                                <span class="match-number">{{ recipeToUse.matchPercentage }}%</span>
+                            </div>
+                            <span class="match-label">Ingredient Match</span>
                         </div>
                         
-                        <h4>Ingredients</h4>
-                        <ul class="ingredients-list">
-                            <li 
-                                v-for="(ingredient, index) in extractRecipeIngredients(selectedRecipe)" 
+                        <div v-if="ingredientsToDeduct.filter(i => i.isExpiring).length > 0" 
+                             class="expiring-alert-new">
+                            <div class="expiring-icon-wrapper">
+                                <span class="expiring-icon-large">⏰</span>
+                            </div>
+                            <div class="expiring-content">
+                                <strong>Expiring Soon</strong>
+                                <p class="mb-0">
+                                    {{ ingredientsToDeduct.filter(i => i.isExpiring).map(i => i.name).join(', ') }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ingredients List -->
+                    <div class="ingredients-section-new">
+                        <h3 class="section-title-new">Select Ingredients to Deduct</h3>
+                        <p class="section-subtitle">Review and adjust quantities before confirming</p>
+                        
+                        <div class="ingredients-list-new">
+                            <div 
+                                v-for="(ingredient, index) in ingredientsToDeduct" 
                                 :key="index"
-                                :class="{ 
-                                    'ingredient-available': selectedRecipe.matchedIngredients.includes(ingredient),
-                                    'ingredient-expiring': isIngredientExpiring(ingredient),
-                                    'ingredient-missing': !selectedRecipe.matchedIngredients.includes(ingredient)
-                                }">
-                                <span class="ingredient-icon">
-                                    {{ selectedRecipe.matchedIngredients.includes(ingredient) ? '✓' : '✗' }}
-                                    {{ isIngredientExpiring(ingredient) ? '🔥' : '' }}
-                                </span>
-                                {{ getIngredientMeasure(selectedRecipe, index + 1) }} {{ ingredient }}
-                            </li>
-                        </ul>
-                        
-                        <h4 class="mt-4">Instructions</h4>
-                        <div class="instructions">
-                            <p>{{ selectedRecipe.strInstructions }}</p>
+                                class="ingredient-card"
+                                :class="{
+                                    'ingredient-expiring-card': ingredient.isExpiring,
+                                    'ingredient-available-card': ingredient.available && !ingredient.isExpiring,
+                                    'ingredient-missing-card': !ingredient.available,
+                                    'ingredient-unchecked-card': !ingredient.checked
+                                }"
+                            >
+                                <div class="ingredient-card-content">
+                                    <!-- Left: Checkbox and Status -->
+                                    <div class="ingredient-left">
+                                        <input 
+                                            type="checkbox" 
+                                            v-model="ingredient.checked"
+                                            :disabled="!ingredient.available"
+                                            class="modern-checkbox"
+                                        >
+                                        <div class="ingredient-status-badge" 
+                                             :class="{
+                                                 'status-expiring': ingredient.isExpiring,
+                                                 'status-available': ingredient.available && !ingredient.isExpiring,
+                                                 'status-missing': !ingredient.available
+                                             }">
+                                            <span class="status-icon">
+                                                {{ ingredient.isExpiring ? '⏰' : 
+                                                   ingredient.available ? '✓' : '✗' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Center: Ingredient Details -->
+                                    <div class="ingredient-center">
+                                        <div class="ingredient-name">{{ ingredient.name }}</div>
+                                        <div class="ingredient-measure">{{ ingredient.measure }}</div>
+                                    </div>
+                                    
+                                    <!-- Right: Quantity Edit -->
+                                    <div class="ingredient-right" v-if="ingredient.available">
+                                        <div class="quantity-editor">
+                                            <input 
+                                                type="number" 
+                                                v-model.number="ingredient.editableQuantity"
+                                                :disabled="!ingredient.checked"
+                                                class="quantity-input-new"
+                                                step="0.01"
+                                                min="0"
+                                            >
+                                            <span class="quantity-unit">{{ ingredient.inventoryUnit }}</span>
+                                        </div>
+                                        <span v-if="ingredient.unitMatch === 'mismatch'" 
+                                              class="warning-badge" 
+                                              title="Unit mismatch - please verify">
+                                            ⚠️
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div v-if="selectedRecipe.strYoutube" class="mt-3">
-                            <a 
-                                :href="selectedRecipe.strYoutube" 
-                                target="_blank" 
-                                class="btn btn-danger">
-                                Watch Video Tutorial
-                            </a>
-                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="modal-actions-new">
+                        <button 
+                            class="btn-modern btn-cancel" 
+                            @click="cancelUseRecipe"
+                            :disabled="usingRecipe"
+                        >
+                            <span>Cancel</span>
+                        </button>
+                        <button 
+                            class="btn-modern btn-confirm" 
+                            @click="confirmUseRecipe"
+                            :disabled="usingRecipe"
+                        >
+                            <span v-if="usingRecipe">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                Processing...
+                            </span>
+                            <span v-else>
+                                ✓ Confirm & Use Recipe ({{ ingredientsToDeduct.filter(i => i.checked).length }} items)
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Undo Notification Toast -->
+        <div v-if="showUndoNotification" class="undo-toast">
+            <div class="undo-toast-content">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>✓ Recipe Used Successfully!</strong>
+                        <p class="mb-0 mt-1" v-if="lastDeduction">
+                            <small>{{ lastDeduction.recipeName }} - Ingredients deducted</small>
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-warning btn-sm" @click="undoRecipeUse">
+                            ↶ Undo
+                        </button>
+                        <button class="btn btn-sm btn-outline-light" @click="dismissUndo">
+                            ✕
+                        </button>
                     </div>
                 </div>
             </div>
@@ -609,7 +1164,7 @@ export default {
     </div>
 </template>
 
-<style scoped>
+<style>
 .recipes-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -666,7 +1221,6 @@ export default {
 
 .recipe-image-container {
     position: relative;
-    width: 100%;
     height: 200px;
     overflow: hidden;
 }
@@ -681,88 +1235,78 @@ export default {
     position: absolute;
     top: 10px;
     right: 10px;
-    padding: 8px 15px;
+    padding: 8px 12px;
     border-radius: 20px;
     font-weight: bold;
     font-size: 0.9em;
     color: white;
 }
 
-/* NEW: Expiring ingredients badge */
+/* NEW: Expiring badge */
 .expiring-badge {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    padding: 8px 15px;
-    border-radius: 20px;
-    font-weight: bold;
-    font-size: 0.85em;
+    top: 45px;
+    right: 10px;
     background: #ff6b6b;
     color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.75em;
+    font-weight: 600;
 }
 
-.match-excellent {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-}
-
-.match-good {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.match-fair {
-    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.match-low {
-    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
+.match-excellent { background: #28a745; }
+.match-good { background: #17a2b8; }
+.match-fair { background: #ffc107; }
+.match-low { background: #dc3545; }
 
 .recipe-content {
     padding: 20px;
 }
 
 .recipe-title {
-    font-size: 1.3em;
+    font-size: 1.2em;
     margin-bottom: 10px;
     color: #333;
+    min-height: 50px;
 }
 
 .recipe-meta {
     margin-bottom: 15px;
-}
-
-.recipe-meta .badge {
-    margin-right: 5px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .ingredient-summary {
-    padding-top: 10px;
-    border-top: 1px solid #eee;
+    font-size: 0.9em;
+    color: #666;
 }
 
-/* NEW: Expiring ingredients styling */
+/* NEW: Expiring ingredients in summary */
 .expiring-ingredients {
-    margin-top: 8px;
+    background: #fff3cd;
     padding: 8px;
-    background: #fff5f5;
-    border-radius: 5px;
+    border-radius: 6px;
+    margin-top: 8px;
+    color: #856404;
 }
 
 .missing-ingredients {
     margin-top: 8px;
 }
 
-/* Recipe Modal */
+/* Modal Styles */
 .recipe-modal {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0, 0, 0, 0.7);
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     z-index: 1000;
     padding: 20px;
     overflow-y: auto;
@@ -770,112 +1314,833 @@ export default {
 
 .recipe-modal-content {
     background: white;
-    border-radius: 15px;
-    padding: 30px;
-    max-width: 900px;
+    border-radius: 16px;
+    max-width: 1200px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
     position: relative;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .btn-close-modal {
     position: absolute;
     top: 15px;
     right: 15px;
-    background: none;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
     border: none;
-    font-size: 2em;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 24px;
     cursor: pointer;
-    color: #666;
     z-index: 10;
+    transition: background 0.3s, transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 .btn-close-modal:hover {
-    color: #000;
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
 }
 
-.recipe-detail-image {
+/* ========== STYLED RECIPE DETAIL MODAL (Reference Design) ========== */
+
+.recipe-detail-modal-styled {
+    max-width: 1000px;
+    padding: 0;
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.recipe-detail-layout-styled {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    min-height: 700px;
+}
+
+/* Left Side: Image and Cards */
+.recipe-detail-left {
+    background: #f8f9fa;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.recipe-image-wrapper {
     width: 100%;
-    border-radius: 10px;
-    margin-bottom: 20px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.match-detail {
-    padding: 15px;
-    border-radius: 10px;
-    text-align: center;
+.detail-recipe-image-styled {
+    width: 100%;
+    height: 250px;
+    object-fit: cover;
+    display: block;
+}
+
+/* Match Badge Card */
+.match-card {
+    background: linear-gradient(135deg, #ff9a56 0%, #ff6a6a 100%);
+    padding: 20px;
+    border-radius: 12px;
     color: white;
-    margin-bottom: 20px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(255, 154, 86, 0.3);
 }
 
-/* NEW: Expiring detail in modal */
-.expiring-detail {
-    background: #fff5f5;
+.match-card.match-excellent {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+}
+
+.match-card.match-good {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.match-card.match-fair {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
+}
+
+.match-card.match-low {
+    background: linear-gradient(135deg, #ff9a56 0%, #ff6a6a 100%);
+    box-shadow: 0 4px 12px rgba(255, 154, 86, 0.3);
+}
+
+.match-percentage {
+    font-size: 2.5em;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 5px;
+}
+
+.match-text {
+    font-size: 1em;
+    font-weight: 500;
+    opacity: 0.95;
+}
+
+/* Expiring Ingredients Card */
+.expiring-card {
+    background: white;
     border: 2px solid #ff6b6b;
-    border-radius: 10px;
     padding: 15px;
-    margin-bottom: 20px;
+    border-radius: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
 }
 
-.expiring-detail h5 {
+.expiring-icon {
+    font-size: 1.8em;
+    flex-shrink: 0;
+}
+
+.expiring-text strong {
+    display: block;
     color: #dc3545;
-    margin-bottom: 10px;
+    font-size: 1em;
+    margin-bottom: 5px;
 }
 
-.recipe-badges {
-    margin: 15px 0;
+.expiring-text p {
+    color: #666;
+    font-size: 0.9em;
+    margin: 0;
+    line-height: 1.4;
 }
 
-.ingredients-list {
+/* Right Side: Content */
+.recipe-detail-right {
+    background: white;
+    display: flex;
+    flex-direction: column;
+}
+
+.recipe-title-section {
+    padding: 25px 30px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.recipe-modal-title {
+    font-size: 1.8em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 12px 0;
+}
+
+.recipe-modal-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.recipe-scrollable-content {
+    flex: 1;
+    padding: 25px 30px 0 30px;
+    overflow-y: auto;
+    max-height: calc(100vh - 350px);
+    min-height: 450px;
+}
+
+/* Custom Scrollbar for recipe content */
+.recipe-scrollable-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.recipe-scrollable-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.recipe-scrollable-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.recipe-scrollable-content::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.section-heading {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 15px 0;
+}
+
+/* Ingredients List Styled */
+.ingredients-list-styled {
     list-style: none;
     padding: 0;
+    margin: 0 0 30px 0;
 }
 
-.ingredients-list li {
-    padding: 8px 12px;
-    margin: 5px 0;
-    border-radius: 5px;
+.ingredient-item-styled {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    margin: 6px 0;
+    border-radius: 8px;
+    font-size: 0.95em;
+    transition: all 0.2s;
 }
 
-.ingredient-available {
+.ingredient-available-styled {
     background: #d4edda;
-    color: #155724;
+    border: 1px solid #c3e6cb;
 }
 
-/* NEW: Expiring ingredient styling */
-.ingredient-expiring {
-    background: #fff3cd !important;
-    color: #856404 !important;
+.ingredient-expiring-styled {
+    background: #fff9e6;
     border: 2px solid #ffc107;
+    font-weight: 600;
 }
 
-.ingredient-missing {
+.ingredient-missing-styled {
     background: #f8d7da;
-    color: #721c24;
+    border: 1px solid #f5c6cb;
+    opacity: 0.7;
 }
 
-.ingredient-icon {
+.ingredient-check-icon {
+    font-size: 1.2em;
     font-weight: bold;
-    margin-right: 8px;
+    flex-shrink: 0;
+    width: 30px;
+    text-align: center;
 }
 
-.instructions {
+.ingredient-available-styled .ingredient-check-icon {
+    color: #28a745;
+}
+
+.ingredient-expiring-styled .ingredient-check-icon {
+    color: #f39c12;
+}
+
+.ingredient-missing-styled .ingredient-check-icon {
+    color: #dc3545;
+}
+
+.ingredient-text-styled {
+    flex: 1;
+    color: #2c3e50;
+}
+
+/* Instructions Styled */
+.instructions-styled {
     background: #f8f9fa;
     padding: 20px;
     border-radius: 10px;
-    white-space: pre-line;
-    line-height: 1.6;
+    line-height: 1.8;
+    color: #555;
+    white-space: pre-wrap;
+    font-size: 0.95em;
+    margin-bottom: 0;
+}
+
+/* Modal Actions - Centered Inside Scroll */
+.recipe-modal-actions-centered {
+    margin-top: 30px;
+    margin-bottom: 20px;
+    padding-top: 25px;
+    border-top: 2px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-video-red {
+    background: #e52d27;
+    color: white;
+    padding: 14px 30px;
+    border-radius: 8px;
+    text-decoration: none;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 250px;
+}
+
+.youtube-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.btn-video-red:hover {
+    background: #c9221c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
+    color: white;
+}
+
+.btn-use-recipe-green {
+    background: #28a745;
+    color: white;
+    padding: 14px 30px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-width: 250px;
+}
+
+.btn-use-recipe-green:hover {
+    background: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+/* Responsive for styled modal */
+@media (max-width: 900px) {
+    .recipe-detail-layout-styled {
+        grid-template-columns: 1fr;
+    }
+    
+    .recipe-detail-left {
+        padding: 20px;
+    }
+    
+    .detail-recipe-image-styled {
+        height: 200px;
+    }
+    
+    .recipe-scrollable-content {
+        max-height: calc(100vh - 500px);
+        min-height: 300px;
+    }
+    
+    .recipe-modal-actions-centered {
+        padding: 20px 0 0 0;
+    }
+    
+    .btn-video-red,
+    .btn-use-recipe-green {
+        width: 100%;
+        min-width: auto;
+    }
+}
+
+/* ========== NEW PRETTIER CONFIRMATION MODAL STYLES ========== */
+
+.use-recipe-modal-new {
+    max-width: 900px;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.recipe-confirmation-layout-new {
+    padding: 40px;
+}
+
+/* Header with Image */
+.confirmation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 30px;
+    margin-bottom: 30px;
+    padding-bottom: 25px;
+    border-bottom: 3px solid #f0f0f0;
+}
+
+.confirmation-title-section {
+    flex: 1;
+}
+
+.confirmation-recipe-name {
+    font-size: 2em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 15px 0;
+    line-height: 1.2;
+}
+
+.confirmation-badges {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.confirmation-image-wrapper {
+    flex-shrink: 0;
+}
+
+.confirmation-recipe-image-small {
+    width: 150px;
+    height: 150px;
+    border-radius: 15px;
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Match Info Card */
+.match-info-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 25px;
+    margin-bottom: 30px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 25px;
+    border-radius: 15px;
+    color: white;
+}
+
+.match-percentage-new {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.match-circle {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.match-number {
+    font-size: 1.8em;
+    font-weight: 700;
+}
+
+.match-label {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.expiring-alert-new {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 15px;
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+}
+
+.expiring-icon-wrapper {
+    flex-shrink: 0;
+}
+
+.expiring-icon-large {
+    font-size: 2.5em;
+    display: block;
+}
+
+.expiring-content strong {
+    display: block;
+    font-size: 1.1em;
+    margin-bottom: 5px;
+}
+
+.expiring-content p {
+    font-size: 0.95em;
+    opacity: 0.95;
+}
+
+/* Ingredients Section */
+.ingredients-section-new {
+    margin-bottom: 30px;
+}
+
+.section-title-new {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 8px;
+}
+
+.section-subtitle {
+    color: #7f8c8d;
+    font-size: 0.95em;
+    margin-bottom: 20px;
+}
+
+.ingredients-list-new {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Custom Scrollbar */
+.ingredients-list-new::-webkit-scrollbar {
+    width: 8px;
+}
+
+.ingredients-list-new::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.ingredients-list-new::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+}
+
+.ingredients-list-new::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+/* Ingredient Cards */
+.ingredient-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px 20px;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.ingredient-expiring-card {
+    border-color: #f39c12;
+    background: linear-gradient(135deg, #fff9e6 0%, #fff 100%);
+}
+
+.ingredient-available-card {
+    border-color: #27ae60;
+    background: linear-gradient(135deg, #e8f8f5 0%, #fff 100%);
+}
+
+.ingredient-missing-card {
+    border-color: #e74c3c;
+    background: linear-gradient(135deg, #fce8e6 0%, #fff 100%);
+    opacity: 0.7;
+}
+
+.ingredient-unchecked-card {
+    opacity: 0.5;
+}
+
+.ingredient-card-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.ingredient-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.modern-checkbox {
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    accent-color: #667eea;
+}
+
+.modern-checkbox:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.ingredient-status-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.status-expiring {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+}
+
+.status-available {
+    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+    color: white;
+}
+
+.status-missing {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+}
+
+.ingredient-center {
+    flex: 1;
+}
+
+.ingredient-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.ingredient-measure {
+    font-size: 0.9em;
+    color: #7f8c8d;
+}
+
+.ingredient-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.quantity-editor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8f9fa;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.quantity-input-new {
+    width: 70px;
+    padding: 6px 10px;
+    border: 2px solid #e9ecef;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 1em;
+    font-weight: 600;
+    color: #2c3e50;
+    transition: all 0.3s;
+}
+
+.quantity-input-new:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.quantity-input-new:disabled {
+    background: #e9ecef;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.quantity-unit {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #7f8c8d;
+}
+
+.warning-badge {
+    font-size: 1.3em;
+}
+
+/* Action Buttons */
+.modal-actions-new {
+    display: flex;
+    gap: 15px;
+    padding-top: 25px;
+    border-top: 3px solid #f0f0f0;
+}
+
+.btn-modern {
+    flex: 1;
+    padding: 16px 30px;
+    font-size: 1.1em;
+    font-weight: 600;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-modern:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-cancel {
+    background: #ecf0f1;
+    color: #7f8c8d;
+}
+
+.btn-cancel:hover:not(:disabled) {
+    background: #bdc3c7;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-confirm {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-confirm:hover:not(:disabled) {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .recipes-grid {
+    .recipe-confirmation-layout-new {
+        padding: 25px;
+    }
+    
+    .confirmation-header {
+        flex-direction: column-reverse;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .confirmation-recipe-name {
+        font-size: 1.6em;
+    }
+    
+    .match-info-card {
         grid-template-columns: 1fr;
     }
     
-    .recipe-modal-content {
-        padding: 20px;
+    .modal-actions-new {
+        flex-direction: column;
+    }
+    
+    .ingredient-card-content {
+        flex-wrap: wrap;
+    }
+    
+    .ingredient-right {
+        width: 100%;
+        justify-content: flex-start;
+        margin-top: 10px;
+    }
+}
+
+/* Undo Toast Notification */
+.undo-toast {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 2000;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.undo-toast-content {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    min-width: 350px;
+    max-width: 500px;
+}
+
+.undo-toast-content strong {
+    font-size: 1.1em;
+}
+
+.undo-toast-content small {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+@media (max-width: 768px) {
+    .undo-toast {
+        bottom: 20px;
+        right: 20px;
+        left: 20px;
+    }
+    
+    .undo-toast-content {
+        min-width: auto;
     }
 }
 </style>
