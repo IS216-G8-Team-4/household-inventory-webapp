@@ -13,32 +13,98 @@ const supabase = createClient(
 const router = useRouter();
 const session = ref(null);
 const showMenu = ref(false);
+const activeProfileId = ref(null);
+
+// Fetch active profile
+const fetchActiveProfile = async () => {
+  if (!session.value) return;
+
+  const userId = session.value.user.id;
+  const { data: households } = await supabase
+    .from("households")
+    .select("id")
+    .eq("created_by", userId)
+    .limit(1);
+
+  const householdId = households?.[0]?.id;
+  if (!householdId) return;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  activeProfileId.value = profile?.id || null;
+};
 
 // Check user session on mount
 onMounted(async () => {
-  const { data } = await supabase.auth.getSession();
-  session.value = data.session;
+  const { data: { session: s } } = await supabase.auth.getSession();
+  session.value = s;
 
-  // Watch for auth changes
+  if (session.value) await fetchActiveProfile();
+
+  // Auth change watcher
   supabase.auth.onAuthStateChange((_event, sess) => {
     session.value = sess;
+    if (sess) {
+      fetchActiveProfile();
+    } else {
+      // ✅ automatically redirect guest back to Loading
+      router.push("/Loading");
+    }
+  });
+
+  // Listen for active profile changes
+  window.addEventListener("activeProfileChanged", (e) => {
+    activeProfileId.value = e.detail?.newActiveId || null;
   });
 });
 
-// Logout function
+// log out 
 const logout = async () => {
-  await supabase.auth.signOut();
-  showMenu.value = false;
-  router.push("/login");
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user && activeProfileId.value) {
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ is_active: false })
+        .eq("id", activeProfileId.value);
+
+      if (updateError) throw updateError;
+    }
+    await supabase.auth.signOut();
+
+    // Clear session-related state
+    session.value = null;
+    activeProfileId.value = null;
+    showMenu.value = false;
+
+    // Force redirect after logout (avoids race condition)
+    router.replace("/Loading");
+  } catch (error) {
+    console.error("Logout failed:", error.message);
+  }
 };
 
-// Navigation function
+// Navigation
 const goTo = (path) => {
   showMenu.value = false;
   router.push(path);
 };
 
-// Toggle user dropdown
+const goToProfileSettings = () => {
+  if (!activeProfileId.value) {
+    alert("No active profile found.");
+    return;
+  }
+  router.push(`/ProfileEdit/${activeProfileId.value}`);
+};
+
+// Toggle dropdown
 const toggleMenu = () => {
   showMenu.value = !showMenu.value;
 };
@@ -48,9 +114,9 @@ const toggleMenu = () => {
   <!-- Bootstrap Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm sticky-top">
     <div class="container-fluid">
-      <!-- Brand -->
-      <RouterLink class="navbar-brand fw-bold text-success" to="/">
-        Household Inventory
+      <!-- 🌿 Brand (links to Loading page) -->
+      <RouterLink class="navbar-brand eco-brand fw-bold" to="/Loading">
+        Eco Pantry
       </RouterLink>
 
       <!-- Toggler for mobile view -->
@@ -63,20 +129,22 @@ const toggleMenu = () => {
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto align-items-center">
 
+          <!-- Guest-only -->
+          <template v-if="!session">
+            <li class="nav-item">
+              <RouterLink class="nav-link" to="/login">Login</RouterLink>
+            </li>
+          </template>
+
           <!-- Always visible -->
           <li class="nav-item">
-            <RouterLink class="nav-link" to="/Loading">Landing Page</RouterLink>
+            <RouterLink class="nav-link" to="/Donation">Donation</RouterLink>
           </li>
 
-          <!-- Show login only if logged out -->
-          <li v-if="!session" class="nav-item">
-            <RouterLink class="nav-link" to="/login">Login</RouterLink>
-          </li>
-
-          <!-- Protected links (only when logged in) -->
+          <!-- Authenticated-only -->
           <template v-if="session">
             <li class="nav-item">
-              <RouterLink class="nav-link" to="/">Home</RouterLink>
+              <RouterLink class="nav-link" to="/Dashboard">Dashboard</RouterLink>
             </li>
             <li class="nav-item">
               <RouterLink class="nav-link" to="/Inventory">Inventory</RouterLink>
@@ -85,21 +153,17 @@ const toggleMenu = () => {
               <RouterLink class="nav-link" to="/Recipes">Recipes</RouterLink>
             </li>
             <li class="nav-item">
-              <RouterLink class="nav-link" to="/Donation">Donation</RouterLink>
-            </li>
-            <li class="nav-item">
-              <RouterLink class="nav-link" to="/Dashboard">Dashboard</RouterLink>
+              <RouterLink class="nav-link" to="/SubmitDonation">Submit Donation</RouterLink>
             </li>
           </template>
 
-          <!-- 🔹 User Icon Dropdown (only when logged in) -->
+          <!-- User dropdown -->
           <li v-if="session" class="nav-item dropdown position-relative">
             <img src="../assets/user-icon.png" alt="User" class="user-icon" @click="toggleMenu" />
-
             <ul v-show="showMenu"
               class="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-sm border-0">
-              <li><button class="dropdown-item" @click="goTo('/Profile')">👤 View Profile</button></li>
-              <li><button class="dropdown-item" @click="goTo('/Settings')">⚙️ Settings</button></li>
+              <li><button class="dropdown-item" @click="goTo('/ProfileList')">👤 Manage Profiles</button></li>
+              <li><button class="dropdown-item" @click="goToProfileSettings">⚙️ Settings</button></li>
               <li>
                 <hr class="dropdown-divider" />
               </li>
@@ -111,11 +175,26 @@ const toggleMenu = () => {
     </div>
   </nav>
 
-  <!-- Page content -->
+  <!-- Page Content -->
   <RouterView />
 </template>
 
 <style scoped>
+/* 🌿 Brand color styling */
+.eco-brand {
+  color: #2e7d32 !important;
+  /* deep green */
+  font-size: 1.4rem;
+  letter-spacing: 0.3px;
+  transition: color 0.25s ease;
+}
+
+.eco-brand:hover {
+  color: #1b5e20 !important;
+  /* darker green hover */
+  text-decoration: none;
+}
+
 /* Highlight active route */
 .router-link-active {
   font-weight: 600;
@@ -149,4 +228,4 @@ const toggleMenu = () => {
   font-size: 0.95rem;
   padding: 8px 14px;
 }
-</style>Ï
+</style>

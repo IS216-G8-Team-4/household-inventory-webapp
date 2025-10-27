@@ -1,7 +1,7 @@
 <template>
   <div class="auth-container">
     <div class="auth-card">
-      <!-- Header with logo and title -->
+      <!-- Header -->
       <div class="header">
         <img src="../assets/logo.jpg" alt="Eco Logo" class="logo" />
         <h2 class="title">{{ pageTitle }}</h2>
@@ -56,7 +56,6 @@ import { createClient } from "@supabase/supabase-js";
 
 export default {
   name: "Login",
-
   data() {
     return {
       mode: "login",
@@ -68,7 +67,6 @@ export default {
       sb: null,
     };
   },
-
   computed: {
     pageTitle() {
       if (this.mode === "login") return "Login";
@@ -83,19 +81,16 @@ export default {
       return "Update Password";
     },
   },
-
   async mounted() {
     const url = import.meta.env.VITE_SUPABASE_URL;
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
     this.sb = createClient(url, key, { auth: { persistSession: true } });
 
-    // Switch to "update" mode if user came from password reset link
     if (window.location.href.includes("type=recovery")) {
       this.mode = "update";
       this.message = "🔒 Please set your new password.";
     }
   },
-
   methods: {
     switchMode(next) {
       this.mode = next;
@@ -117,38 +112,28 @@ export default {
       }
     },
 
-    // Try login; if account not found, create one automatically
+    // Login or auto-create account + household
     async loginOrAutoCreate() {
-      const { error } = await this.sb.auth.signInWithPassword({
+      const { error: loginError, data: loginData } = await this.sb.auth.signInWithPassword({
         email: this.email,
         password: this.password,
       });
 
-      if (!error) {
-        await this.ensureProfile();
+      if (!loginError) {
+        // Successful login → ensure household exists
+        await this.ensureHousehold();
         this.message = "Login successful!";
-        return;
+        this.$router.push("/ProfileList");
       }
 
-      const msg = (error.message || "").toLowerCase();
+      // If login fails due to invalid credentials
+      const msg = (loginError.message || "").toLowerCase();
       const invalid = msg.includes("invalid login credentials");
 
-      if (!invalid) throw error;
-
-      // Check if this email already exists in profiles
-      const { data: found } = await this.sb
-        .from("profiles")
-        .select("id")
-        .eq("email", this.email)
-        .limit(1);
-
-      if (found && found.length > 0) {
-        this.message = "❌ Invalid email or password.";
-        return;
-      }
+      if (!invalid) throw loginError;
 
       // Otherwise, sign up automatically
-      const { error: signUpErr } = await this.sb.auth.signUp({
+      const { error: signUpErr, data: signUpData } = await this.sb.auth.signUp({
         email: this.email,
         password: this.password,
         options: {
@@ -193,44 +178,50 @@ export default {
       this.switchMode("login");
     },
 
-    // Ensures a profile row exists that matches your profiles table
-    async ensureProfile() {
-      const { data: { user } } = await this.sb.auth.getUser();
-      if (!user) return;
-
-      const { data: rows } = await this.sb
-        .from("profiles")
-        .select("id")
-        .eq("id", user.id)
-        .limit(1);
-
-      const now = new Date().toISOString();
-
-      if (!rows || rows.length === 0) {
-        await this.sb.from("profiles").insert({
-          id: user.id,
-          email: user.email,
-          full_name: null,
-          household_id: null,
-          food_allergens: [],
-          dietary_preferences: {},
-          preferred_cuisines: [],
-          created_at: now,
-          updated_at: now,
-        });
-      } else {
-        await this.sb
-          .from("profiles")
-          .update({ updated_at: now })
-          .eq("id", user.id);
+    // Create household if it doesn't exist
+    async ensureHousehold() {
+      const { data: { user }, error: userError } = await this.sb.auth.getUser();
+      if (userError || !user) {
+        console.error("User not logged in:", userError);
+        return null;
       }
-    },
+
+      // Try to find existing household
+      const { data: existing, error: selectError } = await this.sb
+        .from("households")
+        .select("id")
+        .eq("created_by", user.id)
+        .limit(1)
+        .single();
+
+      if (!selectError && existing) {
+        return existing.id; // ✅ Found
+      }
+
+      // If not found, try to create one (should rarely happen if trigger works)
+      const { data: inserted, error: insertError } = await this.sb
+        .from("households")
+        .insert({
+          name: user.email,
+          created_by: user.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error("Failed to create household:", insertError);
+        return null;
+      }
+
+      return inserted.id;
+    }
   },
 };
 </script>
 
 <style scoped>
-/* Layout */
 .auth-container {
   display: flex;
   flex-direction: column;
@@ -251,7 +242,6 @@ export default {
   margin: 4rem auto;
 }
 
-/* Header with logo */
 .header {
   display: flex;
   align-items: center;
@@ -265,14 +255,12 @@ export default {
   height: 38px;
 }
 
-/* Title */
 .title {
   font-size: 1.6rem;
   font-weight: 600;
   color: #2e7d32;
 }
 
-/* Form */
 .form-group {
   text-align: left;
   margin-bottom: 1rem;
@@ -318,7 +306,6 @@ export default {
   background-color: #2563eb;
 }
 
-/* Links */
 .links {
   margin-top: 1rem;
   display: flex;
@@ -336,14 +323,12 @@ export default {
   text-decoration: underline;
 }
 
-/* Messages */
 .message {
   margin-top: 1rem;
   color: #444;
   font-size: 0.95rem;
 }
 
-/* Footer */
 .footer {
   width: 100%;
   overflow: hidden;
@@ -356,4 +341,4 @@ export default {
   object-fit: cover;
   display: block;
 }
-</style>Ï
+</style>

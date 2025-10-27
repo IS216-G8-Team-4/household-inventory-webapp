@@ -1,213 +1,310 @@
 <!-- src/components/Donation.vue -->
 <script setup>
-  import { onMounted, ref, reactive} from 'vue'
-  import axios from 'axios'
+/* BEGINNER VERSION — Bootstrap styling, simple structure */
+import { ref, reactive, onMounted, watch } from 'vue'
 
-  /* Read your Google Maps key from Vite env. */
-  const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
+/* Read your key from Vite env: VITE_GOOGLE_MAPS_API_KEY=... */
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
 
-  const mapEl = ref(null)
-  let map, youMarker
+/* State */
+const mapEl = ref(null)
+const status = ref('')
+const isError = ref(false)
+const addr = ref('')
+const radiusKm = ref(8)
+const placesList = reactive([])
 
-  // Load the Google Maps JS ONCE
-  let gmapsPromise
-  function loadGoogleMapsOnce(key) {
-    if (window.google?.maps) return Promise.resolve()
-    if (gmapsPromise) return gmapsPromise
-    gmapsPromise = new Promise((resolve, reject) => {
-      if (!key) return reject(new Error('Missing VITE_GOOGLE_MAPS_API_KEY'))
-      const id = 'gmaps-js'
-      if (document.getElementById(id)) return resolve()
-      const s = document.createElement('script')
-      s.id = id
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&region=SG`
-      s.async = true
-      s.defer = true
-      s.onload = resolve
-      s.onerror = () => reject(new Error('Failed to load Google Maps'))
-      document.head.appendChild(s)
-    })
-    return gmapsPromise
-  }
-  //draws the map with user's coordinate if manage to get
-  function init(center) {
-    map = new google.maps.Map(mapEl.value, {
-      center, zoom: 15, streetViewControl: false
-    })
-    youMarker = new google.maps.Marker({ map, position: center, title: 'You are here' })
-  }
+/* Google objects */
+let map, places, geocoder, info, origin = null
+let originMarker = null
+let markers = []
+let dirService = null
+let dirRenderer = null
 
-  //get users location coordinate and pass to init()
-  function locate() {
-    const sg = { lat: 1.3521, lng: 103.8198 } // fallback: SG
-    if (!navigator.geolocation) return init(sg)
-    navigator.geolocation.getCurrentPosition(
-      p => init({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => init(sg),
-      { enableHighAccuracy: true, timeout: 8000 }
-    )
-  }
+/* Status helper */
+function setStatus(msg = '', error = false) {
+  status.value = msg
+  isError.value = !!error
+  if (msg) console.log('[status]', msg)
+}
 
-  onMounted(async () => {
-    await loadGoogleMapsOnce(API_KEY)
-    locate()
+/* Load Maps */
+function loadGoogle() {
+  return new Promise((resolve, reject) => {
+    if (!API_KEY) return reject(new Error('Missing VITE_GOOGLE_MAPS_API_KEY'))
+    if (window.google?.maps) return resolve()
+    const s = document.createElement('script')
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(API_KEY)}&libraries=places,geometry`
+    s.async = true; s.defer = true
+    s.onload = resolve; s.onerror = reject
+    document.head.appendChild(s)
   })
-
-const form = ref({
-  item_name: '',
-  description: '',
-  quantity: 1,
-  image: null
-})
-
-const donations = ref([])
-const location = ref({ lat: null, lng: null })
-
-const handleImageUpload = e => {
-  form.value.image = e.target.files[0]
 }
 
-onMounted(() => {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      location.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-      fetchNearby()
+/* Init map */
+function initMap() {
+  const sg = { lat: 1.3521, lng: 103.8198 }
+  map = new google.maps.Map(mapEl.value, { center: sg, zoom: 12 })
+  places = new google.maps.places.PlacesService(map)
+  geocoder = new google.maps.Geocoder()
+  info = new google.maps.InfoWindow()
+
+  // Directions
+  dirService = new google.maps.DirectionsService()
+  dirRenderer = new google.maps.DirectionsRenderer({ map })
+
+  map.addListener('click', (e) => setOrigin(e.latLng, 'Dropped pin'))
+  geolocate()
+}
+
+/* My location */
+function geolocate() {
+  if (!navigator.geolocation) {
+    setStatus('Geolocation not supported. Type an address.', true)
+    return
+  }
+  setStatus('Getting your location…')
+  navigator.geolocation.getCurrentPosition(
+    (pos) => setOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }, 'My location'),
+    () => setStatus('Location denied. Type an address or click the map.', true),
+    { enableHighAccuracy: true, timeout: 8000 }
+  )
+}
+
+/* Geocode address */
+function geocodeAddress() {
+  const q = (addr.value || '').trim()
+  if (!q) return setStatus('Type an address first.', true)
+  setStatus('Finding address…')
+  geocoder.geocode({ address: q }, (res, code) => {
+    if (code === 'OK' && res?.length) {
+      const r = res[0]
+      setOrigin(r.geometry.location, r.formatted_address || q)
+    } else {
+      setStatus('Could not find that address.', true)
+    }
+  })
+}
+
+/* Set origin then search */
+function setOrigin(latLngOrObj, label = 'Origin') {
+  const loc = latLngOrObj instanceof google.maps.LatLng
+    ? latLngOrObj
+    : new google.maps.LatLng(latLngOrObj)
+  origin = loc
+  map.setCenter(loc)
+  map.setZoom(14)
+  if (originMarker) originMarker.setMap(null)
+  originMarker = new google.maps.Marker({
+    map, position: loc, title: label,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8 }
+  })
+  searchNearby()
+}
+
+/* Simple filters */
+const INCLUDE_WORDS = [
+  'food bank','food donation','donate food','food drop-off','food drive',
+  'community fridge','people\'s fridge','food pantry','pantry@',
+  'soup kitchen','free meals','food rations','food distribution',
+  'food rescue','willing hearts','food from the heart','the food bank singapore'
+]
+const EXCLUDE_WORDS = [
+  'hawker','food centre','food center','kopitiam','foodcourt','coffeeshop','market',
+  'restaurant','cafe','bakery','bar','bistro','stall','canteen','bubble tea',
+  'supermarket','fairprice','ntuc','cold storage','sheng siong','giant','7-eleven','7 eleven','mall','plaza',
+  'blood','plasma','donor','red cross','hospital','pharmacy','clinic','dentist'
+]
+
+function looksDonation(place) {
+  const name = (place.name || '').toLowerCase()
+  const a = (place.vicinity || place.formatted_address || '').toLowerCase()
+  const hasInclude = INCLUDE_WORDS.some(w => name.includes(w))
+  const hasExclude = EXCLUDE_WORDS.some(w => name.includes(w) || a.includes(w))
+  return hasInclude && !hasExclude
+}
+
+/* Search */
+async function searchNearby() {
+  if (!origin) return setStatus('Set your location first.', true)
+  clearMarkers()
+  placesList.splice(0)
+
+  const radiusMeters = Math.max(1, radiusKm.value) * 1000
+  setStatus(`Searching within ${radiusKm.value} km…`)
+
+  const KEYWORDS = [
+    'food bank','food donation','donate food',
+    'community fridge','food pantry','soup kitchen','free meals',
+    'Willing Hearts','Food from the Heart','The Food Bank Singapore','Pantry@'
+  ]
+
+  const all = []
+  for (const kw of KEYWORDS) {
+    const batch = await nearbySearch({ location: origin, radius: radiusMeters, keyword: kw })
+    all.push(...batch)
+  }
+  if (!all.length) return setStatus('No nearby results. Try a different distance or address.', true)
+
+  const unique = dedupe(all).map(p => ({
+    ...p,
+    distance: google.maps.geometry.spherical.computeDistanceBetween(origin, p.geometry.location)
+  }))
+
+  const filtered = unique
+    .filter(p => p.distance <= radiusMeters)
+    .filter(looksDonation)
+    .sort((a,b) => a.distance - b.distance)
+
+  if (!filtered.length) {
+    return setStatus('Found places, but filtered out non-donation results (hawkers, blood banks, etc.).', true)
+  }
+
+  filtered.forEach((p, i) => addMarker(p, i + 1))
+  placesList.push(...filtered)
+  fitBounds(filtered)
+  setStatus(`Found ${filtered.length} donation spots.`)
+}
+
+/* Places helper */
+function nearbySearch(req) {
+  return new Promise(resolve => {
+    places.nearbySearch(req, (results, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK && results) resolve(results)
+      else resolve([])
     })
-  } else {
-    fetchNearby()
+  })
+}
+function dedupe(arr) {
+  const seen = {}
+  const out = []
+  for (const p of arr) {
+    const id = p.place_id || (p.name + (p.vicinity || ''))
+    if (!seen[id]) { seen[id] = 1; out.push(p) }
   }
+  return out
+}
+
+/* Markers + info */
+function addMarker(place, idx) {
+  const m = new google.maps.Marker({ map, position: place.geometry.location, label: String(idx) })
+  m.addListener('click', () => openInfo(place, m))
+  markers.push(m)
+}
+function openInfo(place, marker) {
+  const name = place.name || '(Place)'
+  const a = place.vicinity || place.formatted_address || ''
+  const ll = place.geometry.location
+  const rating = place.rating ? ` • ⭐ ${place.rating} (${place.user_ratings_total || 0})` : ''
+  const dir = `https://www.google.com/maps/dir/?api=1&destination=${ll.lat()},${ll.lng()}`
+  info.setContent(
+    `<div class="small">
+       <strong>${name}</strong>
+       <div class="text-muted">${a}${rating}</div>
+       <div class="mt-2"><a target="_blank" rel="noopener" href="${dir}">Open in Google Maps</a></div>
+     </div>`
+  )
+  info.open(map, marker)
+}
+function fitBounds(list) {
+  const b = new google.maps.LatLngBounds(origin)
+  list.forEach(p => b.extend(p.geometry.location))
+  map.fitBounds(b, 64)
+}
+function clearMarkers() {
+  markers.forEach(m => m.setMap(null))
+  markers = []
+  // also clear any drawn route when we refresh markers
+  dirRenderer?.set('directions', null)
+}
+
+/* Auto re-search when distance changes */
+watch(radiusKm, () => { if (origin) searchNearby() })
+
+/* Mount */
+onMounted(async () => {
+  try { await loadGoogle(); initMap() }
+  catch (e) { console.error(e); setStatus(e.message || String(e), true) }
 })
 
-const fetchNearby = async () => {
-  try {
-    const { lat, lng } = location.value
-    const res = await axios.get(`http://localhost:3000/api/donations/nearby?lat=${lat}&lng=${lng}`)
-    donations.value = res.data
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-const submitDonation = async () => {
-  const fd = new FormData()
-  fd.append('item_name', form.value.item_name)
-  fd.append('description', form.value.description)
-  fd.append('quantity', form.value.quantity)
-  fd.append('lat', location.value.lat)
-  fd.append('lng', location.value.lng)
-  if (form.value.image) fd.append('image', form.value.image)
-
-  await axios.post('http://localhost:3000/api/donations', fd)
-  form.value = { item_name: '', description: '', quantity: 1, image: null }
-  fetchNearby()
-}
-
-const requestDonation = async id => {
-  await axios.post(`http://localhost:3000/api/donations/${id}/request`, { user_id: 1 })
-  alert('Request sent!')
+/* Show directions to a result i */
+function showDirections(i) {
+  if (!origin) return setStatus('Set your location first.', true)
+  const p = placesList[i]
+  if (!p) return
+  dirRenderer?.set('directions', null)
+  dirService.route(
+    { origin, destination: p.geometry.location, travelMode: google.maps.TravelMode.DRIVING },
+    (res, st) => {
+      
+        setStatus('Directions opened in new tab', true)
+        const d = p.geometry.location
+        window.open(
+          `https://www.google.com/maps/dir/?api=1&origin=${origin.lat()},${origin.lng()}&destination=${d.lat()},${d.lng()}`,
+          '_blank'
+        )
+      }
+  )
 }
 </script>
 
 <template>
-  <div class="page">
-    <aside class="sidebar">
-      <h1>Donation</h1>
+  <div class="container-fluid p-0">
+    <div class="row g-0">
+      <!-- Sidebar -->
+      <aside class="col-12 col-lg-4 border-end bg-white p-3">
+        <h1 class="h4 mb-3">Donation</h1>
 
+        <!-- Status -->
+        <div v-if="status" :class="['alert', 'alert-success', 'py-2']">
+          <strong class="me-2">Status:</strong> {{ status }}
+        </div>
 
-      <!-- later on to search for food nearby -->
-      <div class="row">
-        <button @click="geolocate(false)">Use my location</button>
-        <!-- <span :class="['hint', { danger: statusIsError }]">{{ status }}</span> -->
-      </div>
+        <!-- Address input -->
+        <div class="mb-2 text-muted small">Or type an address:</div>
+        <div class="input-group mb-3">
+          <input v-model="addr" class="form-control" placeholder="e.g. 1 Fusionopolis Pl, Singapore" />
+          <button class="btn btn-primary h-100" @click="geocodeAddress()">Set</button>
+        </div>
 
-      <div class="hint">Or type an address:</div>
-      <div class="row">
-        <input v-model="addr" placeholder="e.g. 1 Fusionopolis Pl, Singapore" />
-        <button @click="geocodeAddress">Set</button>
-      </div>
+        <!-- Range -->
+        <div class="mb-1 text-muted small">Search distance (km)</div>
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <input type="range" min="1" max="20" step="1" v-model.number="radiusKm" class="form-range m-0" />
+          <span class="badge text-bg-primary ">{{ radiusKm }} km</span>
+        </div>
 
-      <div>
-      <!-- loop through all the nearby food places and display them -->
-
-        <div v-for="(p, i) in placesList" :key="p.place_id || i" class="card">
-          <div><strong>{{ i + 1 }}. {{ p.name || '(Place)' }}</strong></div>
-          <div class="hint">{{ p.vicinity || p.formatted_address || '' }}</div>
-          <div class="row rowsm">
-            <span class="pill" v-if="p.distance">≈ {{ (p.distance / 1000).toFixed(2) }} km</span>
-            <span v-if="p.rating" class="pill">Rating {{ p.rating }} ({{ p.user_ratings_total || 0 }})</span>
-            <button @click="focusMarker(i)">Show on map</button>
+        <!-- Results -->
+        <div class="mb-2 text-muted small">Nearby donation points</div>
+        <div class="d-flex flex-column gap-2">
+          <div v-for="(p, i) in placesList" :key="p.place_id || i" class="card">
+            <div class="card-body">
+              <div class="d-flex align-items-start">
+                <div class="fw-semibold m-0">{{ i + 1 }}.  </div>
+                <div class="flex-grow-1">
+                  <div class="fw-semibold">{{ p.name || '(Place)' }}</div>
+                  <div class="text-muted small">{{ p.vicinity || p.formatted_address || '' }}</div>
+                </div>
+              </div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                <span class="badge text-bg-secondary">Average Distance≈ {{ (p.distance / 1000).toFixed(2) }} km</span>
+                <span v-if="p.rating" class="badge text-bg-light">⭐ {{ p.rating }} ({{ p.user_ratings_total || 0 }})</span>
+                <button class="btn btn-success btn-sm ms-auto" @click="showDirections(i)">Show directions</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </aside>
 
-
-    </aside>
-
-    <main ref="mapEl" class="map"></main>
-  </div>
-
-  <div class="container mt-4">
-    <h2 class="mb-3">Community Food Sharing</h2>
-
-    <!-- Donation Form -->
-    <form @submit.prevent="submitDonation" class="mb-4 border p-3 rounded shadow-sm bg-light">
-      <h5>Share Food</h5>
-      <div class="mb-3">
-        <label class="form-label">Item Name</label>
-        <input v-model="form.item_name" type="text" class="form-control" required />
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label">Description</label>
-        <textarea v-model="form.description" class="form-control" rows="2" required></textarea>
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label">Quantity</label>
-        <input v-model.number="form.quantity" type="number" min="1" class="form-control" required />
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label">Image</label>
-        <input type="file" class="form-control" @change="handleImageUpload" />
-      </div>
-
-      <button class="btn btn-success w-100">Submit Donation</button>
-    </form>
-
-    <!-- Nearby Donations -->
-    <div>
-      <h5>Available Donations Nearby</h5>
-      <div v-if="donations.length === 0" class="text-muted">No donations yet.</div>
-
-      <div v-for="donation in donations" :key="donation.id" class="card mb-3">
-        <img v-if="donation.image_url" :src="donation.image_url" class="card-img-top" alt="donation" />
-        <div class="card-body">
-          <h5 class="card-title">{{ donation.item_name }}</h5>
-          <p class="card-text">{{ donation.description }}</p>
-          <p class="text-muted">Qty: {{ donation.quantity }}</p>
-          <button class="btn btn-outline-primary btn-sm" @click="requestDonation(donation.id)">Request</button>
-        </div>
-      </div>
+      <!-- Map -->
+      <main class="col-12 col-lg-8">
+        <div ref="mapEl" class="w-100" style="height: calc(100vh - 0px); min-height: 400px;"></div>
+      </main>
     </div>
   </div>
 </template>
 
-<style scoped>
-:root { --muted:#6b7280; --border:#e5e7eb; --danger:#b91c1c; }
-html,body,:host { height: 100%; }
-.page{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 0px)}
-.sidebar{padding:14px;border-right:1px solid var(--border);overflow:auto}
-.sidebar h1{margin:0 0 10px;font-size:1.25rem}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
-.rowsm{margin-top:6px}
-.hint{color:var(--muted);font-size:.85rem}
-.hint.small{font-size:.75rem;margin-top:6px}
-.danger{color:var(--danger)}
-.map{height:100%;min-height:400px}
-.card{border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0}
-.pill{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:.8rem}
-input,button{padding:8px 10px;border:1px solid var(--border);border-radius:8px}
-button{cursor:pointer}
-@media (max-width:900px){.page{grid-template-columns:1fr}.map{height:60vh}}
+<!-- No scoped CSS needed—Bootstrap handles the styling -->
+<style>
+/* Keep empty or add tiny map tweaks if you like */
 </style>

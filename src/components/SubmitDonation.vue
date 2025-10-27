@@ -1,15 +1,91 @@
+
 <script setup>
+import { ref, onMounted } from 'vue'
+import { createClient } from '@supabase/supabase-js'
 
-</script>
+const SUPABASE_URL = 'https://mtaoplgrwgihghbdzquk.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10YW9wbGdyd2dpaGdoYmR6cXVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0MTA4NDUsImV4cCI6MjA3NTk4Njg0NX0.qPysjEkDHhy0o6AkyE54tzOELuOZLuLR_G5wKE8ek-w'
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-<script>
-    export default { 
-        data() {
-            return {
-                
-            }
-        }
+const form = ref({
+  item_name: '',
+  description: '',
+  quantity: 1,
+  address: '',
+  unit_number: '',
+  postal_code: ''
+})
+
+const donations = ref([])
+const location = ref({ lat: null, lng: null })
+
+const handleImageUpload = (e) => {
+  form.value.image = e.target.files[0]
+}
+
+onMounted(async () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      location.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      await fetchDonations()
+    })
+  } else {
+    await fetchDonations()
+  }
+})
+
+const fetchDonations = async () => {
+  const { data, error } = await supabase.from('donation_submissions').select('*').order('id', { ascending: false })
+  if (error) console.error(error)
+  donations.value = data || []
+}
+
+const submitDonation = async () => {
+  try {
+    let image_url = null
+
+    if (form.value.image) {
+      const file = form.value.image
+      const fileName = `${Date.now()}-${file.name}`
+      const { data: storageData, error: storageError } = await supabase
+        .storage
+        .from('donation-images')
+        .upload(fileName, file)
+
+      if (storageError) throw storageError
+
+      const { data: publicUrl } = supabase
+        .storage
+        .from('donation-images')
+        .getPublicUrl(fileName)
+      image_url = publicUrl.publicUrl
     }
+
+    const { error } = await supabase.from('donation_submissions').insert([
+    {
+      Item_Name: form.value.item_name,
+      Item_Desc: form.value.description,
+      Item_Quan: form.value.quantity,
+      Address: form.value.address,        
+      Unit_Number: form.value.unit_number,    
+      Postal_Code: form.value.postal_code     
+    }
+  ])
+
+    if (error) throw error
+
+    alert('✅ Donation submitted successfully!')
+    form.value = { item_name: '', description: '', quantity: 1, image: null }
+    await fetchDonations()
+  } catch (err) {
+    console.error('Error submitting donation:', err.message)
+    alert('❌ Failed to submit donation.')
+  }
+}
+
+const requestDonation = async (id) => {
+  alert(`Request sent for donation ID ${id}!`)
+}
 </script>
 
 <template>   
@@ -43,6 +119,22 @@
         <input type="file" class="form-control" @change="handleImageUpload" />
       </div>
 
+       <div class="mb-3">
+        <label class="form-label">Address</label>
+        <input v-model="form.address" type="text" class="form-control" required />
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Unit Number</label>
+        <input v-model="form.unit_number" type="text" class="form-control" required />
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Postal Code</label>
+        <input v-model="form.postal_code" type="text" class="form-control" required />
+      </div>
+
+
       <button class="btn btn-success w-100">Submit Donation</button>
     </form>
 
@@ -56,69 +148,10 @@
         <div class="card-body">
           <h5 class="card-title">{{ donation.item_name }}</h5>
           <p class="card-text">{{ donation.description }}</p>
-          <p class="text-muted">Qty: {{ donation.quantity }}</p>
+          <p class="text-muted">Address: {{ donation.address }}, {{ donation.unit_number }}, {{ donation.postal_code }}</p>
           <button class="btn btn-outline-primary btn-sm" @click="requestDonation(donation.id)">Request</button>
         </div>
       </div>
     </div>
   </div>
 </template>
-
-<script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
-
-const form = ref({
-  item_name: '',
-  description: '',
-  quantity: 1,
-  image: null
-})
-
-const donations = ref([])
-const location = ref({ lat: null, lng: null })
-
-const handleImageUpload = e => {
-  form.value.image = e.target.files[0]
-}
-
-onMounted(() => {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      location.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-      fetchNearby()
-    })
-  } else {
-    fetchNearby()
-  }
-})
-
-const fetchNearby = async () => {
-  try {
-    const { lat, lng } = location.value
-    const res = await axios.get(`http://localhost:3000/api/donations/nearby?lat=${lat}&lng=${lng}`)
-    donations.value = res.data
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-const submitDonation = async () => {
-  const fd = new FormData()
-  fd.append('item_name', form.value.item_name)
-  fd.append('description', form.value.description)
-  fd.append('quantity', form.value.quantity)
-  fd.append('lat', location.value.lat)
-  fd.append('lng', location.value.lng)
-  if (form.value.image) fd.append('image', form.value.image)
-
-  await axios.post('http://localhost:3000/api/donations', fd)
-  form.value = { item_name: '', description: '', quantity: 1, image: null }
-  fetchNearby()
-}
-
-const requestDonation = async id => {
-  await axios.post(`http://localhost:3000/api/donations/${id}/request`, { user_id: 1 })
-  alert('Request sent!')
-}
-</script>
