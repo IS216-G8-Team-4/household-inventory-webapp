@@ -1,9 +1,7 @@
 <!-- src/components/Donation.vue -->
 <script setup>
-/* BEGINNER VERSION — Bootstrap styling, simple structure */
 import { ref, reactive, onMounted, watch } from 'vue'
 
-/* Read your key from Vite env: VITE_GOOGLE_MAPS_API_KEY=... */
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
 
 /* State */
@@ -175,6 +173,7 @@ function nearbySearch(req) {
     })
   })
 }
+// removign duplicate places
 function dedupe(arr) {
   const seen = {}
   const out = []
@@ -192,20 +191,41 @@ function addMarker(place, idx) {
   markers.push(m)
 }
 function openInfo(place, marker) {
-  const name = place.name || '(Place)'
-  const a = place.vicinity || place.formatted_address || ''
+  const nameText = place.name || '(Place)'
+  const addrText = place.vicinity || place.formatted_address || ''
   const ll = place.geometry.location
-  const rating = place.rating ? ` • ⭐ ${place.rating} (${place.user_ratings_total || 0})` : ''
+  const ratingText = place.rating
+    ? ` • ⭐ ${place.rating} (${place.user_ratings_total || 0})`
+    : ''
   const dir = `https://www.google.com/maps/dir/?api=1&destination=${ll.lat()},${ll.lng()}`
-  info.setContent(
-    `<div class="small">
-       <strong>${name}</strong>
-       <div class="text-muted">${a}${rating}</div>
-       <div class="mt-2"><a target="_blank" rel="noopener" href="${dir}">Open in Google Maps</a></div>
-     </div>`
-  )
+
+  // build DOM nodes
+  const container = document.createElement('div')
+  container.className = 'small'
+
+  const strong = document.createElement('strong')
+  strong.textContent = nameText
+  container.appendChild(strong)
+
+  const addr = document.createElement('div')
+  addr.textContent = addrText + ratingText
+  container.appendChild(addr)
+
+  const linkWrap = document.createElement('div')
+  linkWrap.className = 'mt-2'
+
+  const link = document.createElement('a')
+  link.href = dir
+  link.target = '_blank'
+  link.textContent = 'Open in Google Maps'
+  linkWrap.appendChild(link)
+
+  container.appendChild(linkWrap)
+
+  info.setContent(container)
   info.open(map, marker)
 }
+
 function fitBounds(list) {
   const b = new google.maps.LatLngBounds(origin)
   list.forEach(p => b.extend(p.geometry.location))
@@ -214,7 +234,6 @@ function fitBounds(list) {
 function clearMarkers() {
   markers.forEach(m => m.setMap(null))
   markers = []
-  // also clear any drawn route when we refresh markers
   dirRenderer?.set('directions', null)
 }
 
@@ -233,18 +252,12 @@ function showDirections(i) {
   const p = placesList[i]
   if (!p) return
   dirRenderer?.set('directions', null)
-  dirService.route(
-    { origin, destination: p.geometry.location, travelMode: google.maps.TravelMode.DRIVING },
-    (res, st) => {
-      
-        setStatus('Directions opened in new tab', true)
-        const d = p.geometry.location
-        window.open(
-          `https://www.google.com/maps/dir/?api=1&origin=${origin.lat()},${origin.lng()}&destination=${d.lat()},${d.lng()}`,
-          '_blank'
-        )
-      }
+  const d = p.geometry.location
+  window.open(
+    `https://www.google.com/maps/dir/?api=1&origin=${origin.lat()},${origin.lng()}&destination=${d.lat()},${d.lng()}`,
+    '_blank'
   )
+  setStatus('Directions opened in new tab', false)
 }
 </script>
 
@@ -303,8 +316,3 @@ function showDirections(i) {
     </div>
   </div>
 </template>
-
-<!-- No scoped CSS needed—Bootstrap handles the styling -->
-<style>
-/* Keep empty or add tiny map tweaks if you like */
-</style>
