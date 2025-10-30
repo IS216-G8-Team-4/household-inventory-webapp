@@ -13,8 +13,7 @@
             to promote sustainable living.
           </p>
           <div class="button-group d-flex justify-content-center gap-3">
-            <button class="btn">Log In</button>
-            <button class="btn">Sign Up</button>
+            <button class="btn" @click="login">Log In / Sign Up</button>
           </div>
         </section>
 
@@ -25,7 +24,9 @@
             <div class="row g-4">
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="feature-card h-100">
-                  <div class="icon-placeholder">🥦</div>
+                  <div class="icon-placeholder">
+                    <img src="../assets/grocery.png" class="feature-icon"></img>
+                  </div>
                   <h3>Real-time Ingredient Tracking</h3>
                   <p>Monitor your fridge inventory and expiry dates to reduce forgotten ingredients and minimize waste.
                   </p>
@@ -33,14 +34,18 @@
               </div>
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="feature-card h-100">
-                  <div class="icon-placeholder">🍳</div>
+                  <div class="icon-placeholder">
+                    <img src="../assets/meal.png" class="feature-icon"></img>
+                  </div>
                   <h3>Personalized Meal Planning</h3>
                   <p>Get recipe suggestions based on your inventory, dietary goals, and cuisine preferences.</p>
                 </div>
               </div>
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="feature-card h-100">
-                  <div class="icon-placeholder">🤝</div>
+                  <div class="icon-placeholder">
+                    <img src="../assets/sharing.png" class="feature-icon"></img>
+                  </div>
                   <h3>Donation & Sharing</h3>
                   <p>Easily donate surplus food and find nearby items using integrated maps and availability tracking.
                   </p>
@@ -48,14 +53,18 @@
               </div>
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="feature-card h-100">
-                  <div class="icon-placeholder">⏰</div>
+                  <div class="icon-placeholder">
+                    <img src="../assets/network-error.png" class="feature-icon"></img>
+                  </div>
                   <h3>Expiry Alerts</h3>
-                  <p>Receive notifications 3 days, 1 day, and on expiry to help reduce waste and prioritize usage.</p>
+                  <p>Receive notifications to help reduce waste and prioritize usage.</p>
                 </div>
               </div>
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="feature-card h-100">
-                  <div class="icon-placeholder">📊</div>
+                  <div class="icon-placeholder">
+                    <img src="../assets/dashboard.png" class="feature-icon"></img>
+                  </div>
                   <h3>Analytics Dashboard</h3>
                   <p>Track your food wastage, cost savings, environmental impact, and consumption patterns over time.
                   </p>
@@ -63,9 +72,11 @@
               </div>
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="feature-card h-100">
-                  <div class="icon-placeholder">👨‍👩‍👧‍👦</div>
-                  <h3>User Profile & Multi-User Support</h3>
-                  <p>Set up dietary preferences, allergies, and allow family members to share the same household
+                  <div class="icon-placeholder">
+                    <img src="../assets/skill.png" class="feature-icon"></img>
+                  </div>
+                  <h3>Multi-User Support</h3>
+                  <p>Set up personal dietary preferences, allergies, and allow family members to share the same household
                     inventory.</p>
                 </div>
               </div>
@@ -211,6 +222,8 @@
     </template>
 
     <script>
+import Login from './login.vue';
+
 export default {
   name: "FoodSaverLanding",
   data() {
@@ -223,12 +236,21 @@ export default {
     },
     scrollToTop() {
       window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    login() {
+      this.$router.push("/login")
     }
   }
 };
 </script>
 
     <style scoped>
+
+    .feature-icon{
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
       .page {
         min-height: 100vh;
         background-color: #f9fafb;
