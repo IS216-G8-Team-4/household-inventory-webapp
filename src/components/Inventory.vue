@@ -16,10 +16,36 @@
     const sortLabel = computed(() => sortBy.value === 'expiry' ? 'Expiring Soon' : 'Alphabetical (A–Z)')
     const searchQuery = ref('') // Placeholder for upcoming feature
 
-    // Computed: sort logic
+    // Filter 
+    const selectedCategories = ref([]) // Which categories are checked
+    const availableCategories = computed(() => {
+    // Extract unique categories from current inventory
+    const all = inventory.value.map(i => i.category).filter(Boolean)
+    return [...new Set(all)].sort()
+    })
+    
+    // Computed: Sort logic
     const sortedInventory = computed(() => {
         if (sortBy.value === 'alphabetical') {
-            return [...inventory.value].sort((a, b) => a.name.localeCompare(b.name))
+            let list = [...inventory.value]
+
+            // Apply category filter (if any selected)
+            if (selectedCategories.value.length > 0) {
+            list = list.filter(item => selectedCategories.value.includes(item.category))
+            }
+
+            // Sort logic
+            if (sortBy.value === 'alphabetical') {
+            list.sort((a, b) => a.name.localeCompare(b.name))
+            } else if (sortBy.value === 'expiry') {
+            list.sort((a, b) => {
+                const earliestA = Math.min(...a.batches.map(b => new Date(b.expiryDate)))
+                const earliestB = Math.min(...b.batches.map(b => new Date(b.expiryDate)))
+                return earliestA - earliestB
+            })
+            }
+
+            return list
         } else if (sortBy.value === 'expiry') {
             // Sort by earliest batch expiry date
             return [...inventory.value].sort((a, b) => {
@@ -192,7 +218,24 @@
                     Filter by Category
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="filterDropdown">
-                    <li><a class="dropdown-item disabled" href="#">Coming soon</a></li>
+                    <li v-for="cat in availableCategories" :key="cat" class="px-3 py-1">
+                    <div class="form-check">
+                        <input 
+                        class="form-check-input" 
+                        type="checkbox" 
+                        :value="cat" 
+                        v-model="selectedCategories" 
+                        :id="`filter-${cat}`"
+                        >
+                        <label class="form-check-label" :for="`filter-${cat}`">
+                        {{ cat }}
+                        </label>
+                    </div>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li class="px-3">
+                    <button class="btn btn-sm btn-outline-secondary w-100" @click="selectedCategories = []">Clear Filters</button>
+                    </li>
                 </ul>
             </div>
 
