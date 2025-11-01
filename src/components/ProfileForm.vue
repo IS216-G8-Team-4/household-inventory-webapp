@@ -1,38 +1,3 @@
-<template>
-  <div class="profile-form-container">
-    <h2>Create a New Profile</h2>
-
-    <form @submit.prevent="createProfile">
-      <div class="form-group">
-        <label>Profile Name</label>
-        <input v-model="profileName" type="text" placeholder="Enter profile name" required />
-      </div>
-
-      <div class="form-group">
-        <label>Food Allergens (comma-separated)</label>
-        <input v-model="foodAllergens" type="text" placeholder="e.g. peanuts, shellfish" />
-      </div>
-
-      <div class="form-group">
-        <label>Dietary Preferences (JSON format or leave empty)</label>
-        <textarea v-model="dietaryPreferences" rows="2" placeholder='e.g. ["vegetarian","halal"]'></textarea>
-      </div>
-
-      <div class="form-group">
-        <label>Preferred Cuisines (comma-separated)</label>
-        <input v-model="preferredCuisines" type="text" placeholder="e.g. Italian, Chinese" />
-      </div>
-
-      <button type="submit" class="btn-primary" :disabled="isBusy">
-        <span v-if="!isBusy">Create Profile</span>
-        <span v-else>Creating...</span>
-      </button>
-
-      <p class="message">{{ message }}</p>
-    </form>
-  </div>
-</template>
-
 <script>
 import { createClient } from "@supabase/supabase-js";
 
@@ -42,128 +7,639 @@ export default {
     return {
       profileName: "",
       foodAllergens: "",
-      dietaryPreferences: "",
+      selectedDiets: [],
       preferredCuisines: "",
       message: "",
+      messageType: "success",
       isBusy: false,
       sb: null,
+      dietaryOptions: [
+        "Vegetarian",
+        "Vegan",
+        "Pescatarian",
+        "Halal",
+        "Kosher",
+        "Gluten-Free",
+        "Dairy-Free",
+        "Keto",
+        "Paleo",
+      ],
     };
   },
+
   async mounted() {
     const url = import.meta.env.VITE_SUPABASE_URL;
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
     this.sb = createClient(url, key, { auth: { persistSession: true } });
   },
+
   methods: {
     async createProfile() {
+      // validate profile name 
+      if (!this.profileName || this.profileName.trim().length === 0) {
+        alert("Please enter a valid name", "error");
+        return;
+      }
+
       this.isBusy = true;
       this.message = "";
 
       try {
-        // 1️⃣ Get current logged-in user
-        const { data: { user }, error: userError } = await this.sb.auth.getUser();
-        if (userError || !user) throw new Error("User not logged in");
+        // get currently logged-in user
+        const { data: userData, error: userError } = await this.sb.auth.getUser();
+        if (userError || !userData || !userData.user) {
+          console.error("User not logged in or error fetching user");
+          alert("User not logged in", "error");
+          return;
+        }
+        const user = userData.user;
 
-        // 2️⃣ Find the household
-        const { data: householdRows } = await this.sb
+        // find household 
+        const { data: householdRows, error: householdError } = await this.sb
           .from("households")
           .select("id")
           .eq("created_by", user.id)
           .limit(1);
 
-        const householdId = householdRows?.[0]?.id;
-        if (!householdId) throw new Error("Household not found");
+        if (householdError) {
+          console.error("Error fetching household:", householdError);
+          alert("Household not found", "error");
+          return;
+        }
 
-        // 3️⃣ Insert the new profile
-        const { error } = await this.sb.from("profiles").insert({
-          profile_name: this.profileName.trim(),
-          household_id: householdId,
-          food_allergens: this.foodAllergens
-            ? this.foodAllergens.split(",").map((a) => a.trim())
-            : [],
-          dietary_preferences: this.dietaryPreferences
-            ? JSON.parse(this.dietaryPreferences)
-            : [],
-          preferred_cuisines: this.preferredCuisines
-            ? this.preferredCuisines.split(",").map((c) => c.trim())
-            : [],
-          is_active: false,
-        });
+        let householdId = null;
+        if (householdRows && householdRows.length > 0) {
+          householdId = householdRows[0].id;
+        }
 
-        if (error) throw error;
-        this.message = "✅ Profile created successfully!";
-        this.profileName = this.foodAllergens = this.dietaryPreferences = this.preferredCuisines = "";
-      } catch (e) {
-        this.message = `❌ ${e.message}`;
-      } finally {
+        if (!householdId) {
+          console.error("Household not found for user:", user.id);
+          alert("Household not found", "error");
+          return;
+        }
+
+        //allergens array
+        let allergensArray = [];
+        if (this.foodAllergens && this.foodAllergens.length > 0) {
+          const temp = this.foodAllergens.split(",");
+          for (let i = 0; i < temp.length; i++) {
+            const trimmed = temp[i].trim();
+            if (trimmed.length > 0) {
+              allergensArray.push(trimmed);
+            }
+          }
+        }
+
+        //cuisines array 
+        let cuisinesArray = [];
+        if (this.preferredCuisines && this.preferredCuisines.length > 0) {
+          const temp = this.preferredCuisines.split(",");
+          for (let i = 0; i < temp.length; i++) {
+            const trimmed = temp[i].trim();
+            if (trimmed.length > 0) {
+              cuisinesArray.push(trimmed);
+            }
+          }
+        }
+
+        //insert new profile into database 
+        const { error: insertError } = await this.sb
+          .from("profiles")
+          .insert({
+            profile_name: this.profileName.trim(),
+            household_id: householdId,
+            food_allergens: allergensArray,
+            dietary_preferences: this.selectedDiets,
+            preferred_cuisines: cuisinesArray,
+            is_active: false,
+          });
+
+        if (insertError) {
+          console.error("Error inserting profile:", insertError);
+          alert(`Failed to create profile: ${insertError.message}`, "error");
+          return;
+        }
+
+        //clear form 
+        this.profileName = "";
+        this.foodAllergens = "";
+        this.selectedDiets = [];
+        this.preferredCuisines = "";
+
+        this.$router.push("/ProfileList");
         this.isBusy = false;
-      }
-      this.$router.push("/Dashboard");
+
+      } 
+      catch (e) {
+        console.error("Failed to create profile:", e.message);
+        alert(`Failed to create profile: ${e.message}`, "error");
+        this.isBusy = false;
+      } 
+    },
+
+    cancelCreate() {
+      this.$router.push("/ProfileList");
     },
   },
 };
 </script>
 
+
+<template>
+  <div class="create-profile-wrapper">
+    <div class="create-profile-container">
+      <div class="profile-header">
+        <div class="header-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="8.5" cy="7" r="4"></circle>
+            <line x1="20" y1="8" x2="20" y2="14"></line>
+            <line x1="23" y1="11" x2="17" y2="11"></line>
+          </svg>
+        </div>
+        <h2>Create New Profile</h2>
+        <p class="subtitle">Add a new household member with their preferences</p>
+      </div>
+
+      <div class="profile-form">
+        <div class="form-group">
+          <label for="profile-name">
+            <span class="label-icon">👤</span>
+            Profile Name
+            <span class="required">*</span>
+          </label>
+          <input 
+            id="profile-name"
+            v-model="profileName" 
+            type="text"
+            placeholder="e.g., John, Mom, Dad"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="allergens">
+            <span class="label-icon">⚠️</span>
+            Food Allergens
+          </label>
+          <input 
+            id="allergens"
+            v-model="foodAllergens" 
+            type="text"
+            placeholder="e.g., Peanuts, Shellfish, Dairy"
+            class="form-input"
+          />
+          <span class="helper-text">Separate multiple allergens with commas</span>
+        </div>
+
+        <div class="form-group">
+          <label for="dietary">
+            <span class="label-icon">🥗</span>
+            Dietary Preferences
+          </label>
+          <div class="dietary-options">
+            <label class="checkbox-label" v-for="diet in dietaryOptions" :key="diet">
+              <input 
+                type="checkbox" 
+                :value="diet" 
+                v-model="selectedDiets"
+                class="checkbox-input"
+              />
+              <span class="checkbox-custom"></span>
+              <span class="checkbox-text">{{ diet }}</span>
+            </label>
+          </div>
+          <span class="helper-text">Select all that apply</span>
+        </div>
+
+        <div class="form-group">
+          <label for="cuisines">
+            <span class="label-icon">🍽️</span>
+            Preferred Cuisines
+          </label>
+          <input 
+            id="cuisines"
+            v-model="preferredCuisines" 
+            type="text"
+            placeholder="e.g., Italian, Chinese, Mexican"
+            class="form-input"
+          />
+          <span class="helper-text">Separate multiple cuisines with commas</span>
+        </div>
+
+        <div class="button-group">
+          <button type="button" class="btn btn-create" @click="createProfile" :disabled="isBusy">
+            <svg v-if="!isBusy" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <div v-else class="spinner-small"></div>
+            <span v-if="!isBusy">Create Profile</span>
+            <span v-else>Creating...</span>
+          </button>
+          <button type="button" class="btn btn-cancel" @click="cancelCreate" :disabled="isBusy">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <transition name="fade">
+        <div v-if="message" :class="['alert', messageType]">
+          <span class="alert-icon">{{ messageType === 'success' ? '✓' : '✕' }}</span>
+          <span>{{ message }}</span>
+        </div>
+      </transition>
+    </div>
+  </div>
+</template>
+
 <style scoped>
-.profile-form-container {
-  max-width: 420px;
-  background: #fff;
-  padding: 2rem;
-  margin: 2rem auto;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  font-family: system-ui, sans-serif;
+.create-profile-wrapper {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 50%, #e0f2f1 100%);
+  padding: 2rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-h2 {
+.create-profile-container {
+  max-width: 600px;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header Section */
+.profile-header {
+  background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+  color: white;
+  padding: 3rem 2rem 2.5rem;
   text-align: center;
-  color: #2e7d32;
-  margin-bottom: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.profile-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  animation: pulse 4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.header-icon {
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+.header-icon svg {
+  color: white;
+}
+
+.profile-header h2 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+  position: relative;
+  z-index: 1;
+}
+
+.subtitle {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Form Section */
+.profile-form {
+  padding: 2rem;
 }
 
 .form-group {
-  margin-bottom: 1rem;
-  text-align: left;
+  margin-bottom: 1.75rem;
 }
 
 .form-group label {
-  font-weight: 500;
-  display: block;
-  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #2e7d32;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
 }
 
-.form-group input,
-.form-group textarea {
+.label-icon {
+  font-size: 1.2rem;
+}
+
+.required {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.form-input {
   width: 100%;
-  padding: 0.6rem;
-  border-radius: 8px;
-  border: 1px solid #ccc;
+  padding: 0.875rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: #fafafa;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
   outline: none;
+  border-color: #2e7d32;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.1);
 }
 
-.form-group input:focus,
-.form-group textarea:focus {
-  border-color: #3b82f6;
+.form-input::placeholder {
+  color: #9e9e9e;
 }
 
-.btn-primary {
-  width: 100%;
-  padding: 0.75rem;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
+.helper-text {
+  display: block;
+  font-size: 0.8rem;
+  color: #757575;
+  margin-top: 0.375rem;
+  font-style: italic;
+}
+
+/* Dietary Options */
+.dietary-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.625rem;
+  background: #fafafa;
+  border: 2px solid #e0e0e0;
   border-radius: 10px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.checkbox-label:hover {
+  background: #f5f5f5;
+  border-color: #bdbdbd;
+}
+
+.checkbox-input {
+  display: none;
+}
+
+.checkbox-custom {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #bdbdbd;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.checkbox-input:checked + .checkbox-custom {
+  background: #2e7d32;
+  border-color: #2e7d32;
+}
+
+.checkbox-input:checked + .checkbox-custom::after {
+  content: '✓';
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.checkbox-text {
+  font-size: 0.875rem;
+  color: #424242;
+  font-weight: 500;
+}
+
+.checkbox-input:checked ~ .checkbox-text {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+/* Button Group */
+.button-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.btn-primary:hover {
-  background-color: #2563eb;
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.message {
-  margin-top: 1rem;
-  text-align: center;
+.btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.btn-create {
+  background: linear-gradient(135deg, #2e7d32, #388e3c);
+  color: white;
+}
+
+.btn-create:not(:disabled):hover {
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
+}
+
+.btn-cancel {
+  background: #f5f5f5;
+  color: #616161;
+}
+
+.btn-cancel:not(:disabled):hover {
+  background: #e0e0e0;
+}
+
+/* Spinner */
+.spinner-small {
+  width: 18px;
+  height: 18px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Alert Messages */
+.alert {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: slideInRight 0.4s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.alert.success {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 2px solid #a5d6a7;
+}
+
+.alert.error {
+  background: #ffebee;
+  color: #c62828;
+  border: 2px solid #ef9a9a;
+}
+
+.alert-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.alert.success .alert-icon {
+  background: #2e7d32;
+  color: white;
+}
+
+.alert.error .alert-icon {
+  background: #c62828;
+  color: white;
+}
+
+/* Transitions */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .create-profile-wrapper {
+    padding: 1rem;
+  }
+
+  .profile-header {
+    padding: 2rem 1.5rem 1.5rem;
+  }
+
+  .profile-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .profile-form {
+    padding: 1.5rem;
+  }
+
+  .dietary-options {
+    grid-template-columns: 1fr;
+  }
+
+  .button-group {
+    grid-template-columns: 1fr;
+  }
+
+  .alert {
+    right: 1rem;
+    left: 1rem;
+  }
 }
 </style>
