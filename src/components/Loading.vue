@@ -1,229 +1,401 @@
-
-    <template>
-      <!-- (Optional) Font Awesome; keep only if you use FA icons -->
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-        crossorigin="anonymous" referrerpolicy="no-referrer" />
-      <div class="page">
-
-        <!-- Hero Section -->
-        <section class="hero text-center">
-          <h1>Reduce Food Waste, Save Money & Eat Sustainably</h1>
-          <p>
-            Track your household ingredients, get recipe suggestions, and share surplus food responsibly
-            to promote sustainable living.
-          </p>
-          <div class="button-group d-flex justify-content-center gap-3">
-            <button class="btn" @click="login">Log In / Sign Up</button>
-          </div>
-        </section>
-
-        <!-- Features (Bootstrap grid: 3 per row lg, 2 per row md, 1 per row sm) -->
-        <section class="features text-center">
-          <h2>Key Features</h2>
-          <div class="container">
-            <div class="row g-4">
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="feature-card h-100">
-                  <div class="icon-placeholder">
-                    <img src="../assets/grocery.png" class="feature-icon"></img>
-                  </div>
-                  <h3>Real-time Ingredient Tracking</h3>
-                  <p>Monitor your fridge inventory and expiry dates to reduce forgotten ingredients and minimize waste.
-                  </p>
-                </div>
-              </div>
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="feature-card h-100">
-                  <div class="icon-placeholder">
-                    <img src="../assets/meal.png" class="feature-icon"></img>
-                  </div>
-                  <h3>Personalized Meal Planning</h3>
-                  <p>Get recipe suggestions based on your inventory, dietary goals, and cuisine preferences.</p>
-                </div>
-              </div>
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="feature-card h-100">
-                  <div class="icon-placeholder">
-                    <img src="../assets/sharing.png" class="feature-icon"></img>
-                  </div>
-                  <h3>Donation & Sharing</h3>
-                  <p>Easily donate surplus food and find nearby items using integrated maps and availability tracking.
-                  </p>
-                </div>
-              </div>
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="feature-card h-100">
-                  <div class="icon-placeholder">
-                    <img src="../assets/network-error.png" class="feature-icon"></img>
-                  </div>
-                  <h3>Expiry Alerts</h3>
-                  <p>Receive notifications to help reduce waste and prioritize usage.</p>
-                </div>
-              </div>
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="feature-card h-100">
-                  <div class="icon-placeholder">
-                    <img src="../assets/dashboard.png" class="feature-icon"></img>
-                  </div>
-                  <h3>Analytics Dashboard</h3>
-                  <p>Track your food wastage, cost savings, environmental impact, and consumption patterns over time.
-                  </p>
-                </div>
-              </div>
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="feature-card h-100">
-                  <div class="icon-placeholder">
-                    <img src="../assets/skill.png" class="feature-icon"></img>
-                  </div>
-                  <h3>Multi-User Support</h3>
-                  <p>Set up personal dietary preferences, allergies, and allow family members to share the same household
-                    inventory.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Corporate Donation (Bootstrap grid) -->
-        <section class="corporate-donation">
-          <div class="container">
-            <div class="row g-4 align-items-start">
-              <div class="col-12 col-lg-6">
-                <div class="corp-text">
-                  <h2>Corporate Donation</h2>
-                  <p>
-                    If you share the same vision with us and wish to connect or collaborate,
-                    please fill out the connect form so we can get back to you and better serve the community.
-                  </p>
-
-                  <div class="corp-button mb-3">
-                    <button class="btn-toggle" @click="showForm = !showForm">
-                      {{ showForm ? 'Close Form' : 'Participate' }}
-                    </button>
-                  </div>
-
-                  <div v-if="showForm" class="corp-form">
-                    <form @submit.prevent="submitForm">
-                      <div class="mb-3">
-                        <label for="name" class="form-label fw-bold">Full Name</label>
-                        <input type="text" id="name" class="form-control shadow-none" placeholder="Enter your name"
-                          required />
-                        <small class="text-muted">We reserve the right to ignore inappropriate submissions.</small>
-                      </div>
-
-                      <div class="mb-3">
-                        <label for="email" class="form-label fw-bold">Email Address</label>
-                        <input type="email" id="email" class="form-control shadow-none" placeholder="Enter your email"
-                          required />
-                        <small class="text-muted">We will never share your email with anyone else.</small>
-                      </div>
-
-                      <button type="submit" class="btn-submit">Submit</button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-
-              <div class="col-12 col-lg-6">
-                <div class="corp-image">
-                  <img src="../assets/corporate.jpg" class="img-fluid rounded-4" alt="Corporate support" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <hr class="divider" />
-
-        <!-- Testimonials (Bootstrap grid) -->
-        <section class="testimonials">
-          <div class="container">
-            <div class="t-wrap text-center">
-              <h2 class="t-title">People love Eco Pantry</h2>
-            </div>
-
-            <div class="row g-4">
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="t-card d-flex flex-column h-100">
-                  <div>
-                    <div class="t-stars" aria-label="5 out of 5 stars">★★★★★</div>
-                    <p class="t-quote">
-                      “Affordable and efficient. The <strong>real-time ingredient tracking</strong> plus
-                      <strong>expiry alerts</strong> stopped my ‘forgotten veggie’ problem. I’m saving money and binning
-                      less every week.”
-                    </p>
-                  </div>
-                  <div class="t-author mt-auto d-flex align-items-center gap-2">
-                    <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=SunnyChef"
-                      alt="Cartoon avatar of a happy chef" />
-                    <div>
-                      <div class="t-name">Jasmine</div>
-                      <div class="t-role">Home cook & reseller</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="t-card d-flex flex-column h-100">
-                  <div>
-                    <div class="t-stars" aria-label="5 out of 5 stars">★★★★★</div>
-                    <p class="t-quote">
-                      “The <strong>Smart-inventory</strong> is brilliant. It suggests
-                      <strong>use-now recipes</strong> for items expiring soon, so stock rotates naturally without me
-                      thinking.”
-                    </p>
-                  </div>
-                  <div class="t-author mt-auto d-flex align-items-center gap-2">
-                    <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=ShopOwnerSue"
-                      alt="Cartoon avatar of a shop owner" />
-                    <div>
-                      <div class="t-name">Jonathan</div>
-                      <div class="t-role">Small business owner</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="t-card d-flex flex-column h-100">
-                  <div>
-                    <div class="t-stars" aria-label="5 out of 5 stars">★★★★★</div>
-                    <p class="t-quote">
-                      “A total game changer! Our household shares one pantry via <strong>multi-user profiles</strong>,
-                      and the <strong>donation map</strong> makes it easy to list extras. The
-                      <strong>analytics</strong> show real savings and CO₂e reduced.”
-                    </p>
-                  </div>
-                  <div class="t-author mt-auto d-flex align-items-center gap-2">
-                    <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=CreatorJake"
-                      alt="Cartoon avatar of a content creator" />
-                    <div>
-                      <div class="t-name">Ashley</div>
-                      <div class="t-role">Content creator</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div> <!-- /row -->
-          </div>
-        </section>
-
-        <!-- Footer -->
-        <footer class="footer-new">
-          <div class="footer-bottom container text-center">
-            <hr />
-            <p class="mb-0">&copy; 2025 FoodSaver — All Rights Reserved</p>
-          </div>
-          <button id="scrollTop" @click="scrollToTop"><i class="fas fa-arrow-up"></i></button>
-        </footer>
-
+<template>
+  <div class="page">
+    <!-- Hero Section -->
+    <section class="hero text-center">
+      <div class="hero-bg-shape" aria-hidden="true"></div>
+      <div class="container">
+        <div class="hero-badge">💚 Reduce waste • Save money • Eat better</div>
+        <h1>Reduce Food Waste, Save Money & Eat Sustainably</h1>
+        <p>Track your household ingredients, get recipe suggestions, and share surplus food responsibly.</p>
+        <div class="button-group d-flex justify-content-center" aria-label="Primary call to action">
+          <RouterLink to="/login" class="btn btn-cta">Get Started</RouterLink>
+        </div>
       </div>
-    </template>
+    </section>
 
-    <script>
-import Login from './login.vue';
+    <!-- How it works (step rail) -->
+    <section id="how" class="how-rail">
+      <div class="container">
+        <h2 class="text-center mb-4">How it works</h2>
 
+        <ol class="steps list-unstyled d-flex flex-column flex-md-row justify-content-between align-items-start">
+          <li class="step">
+            <div class="dot"><i class="fa-solid fa-camera"></i></div>
+            <div class="meta">
+              <h3>Scan & Add</h3>
+              <p>Scan receipts or type items — we track quantities, locations, and expiry dates.</p>
+            </div>
+          </li>
+
+          <li class="connector d-none d-md-block" aria-hidden="true"></li>
+
+          <li class="step">
+            <div class="dot"><i class="fa-solid fa-lightbulb"></i></div>
+            <div class="meta">
+              <h3>Get Smart Suggestions</h3>
+              <p>Cook-now recipes for items expiring soon, sorted by your preferences.</p>
+            </div>
+          </li>
+
+          <li class="connector d-none d-md-block" aria-hidden="true"></li>
+
+          <li class="step">
+            <div class="dot"><i class="fa-solid fa-hand-holding-heart"></i></div>
+            <div class="meta">
+              <h3>Donate Surplus</h3>
+              <p>List extras to neighbours or connect to food banks via map pins.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="features text-center">
+      <h2>Key Features</h2>
+      <div class="container">
+        <div class="row g-4">
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="feature-card h-100">
+              <div class="feature-top">
+                <div class="icon-placeholder" aria-hidden="true">🥦</div>
+                <span class="pill">Most used</span>
+              </div>
+              <h3>Real-time Ingredient Tracking</h3>
+              <p>Monitor your fridge inventory and expiry dates to reduce forgotten ingredients and minimize waste.</p>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="feature-card h-100">
+              <div class="feature-top">
+                <div class="icon-placeholder" aria-hidden="true">🍳</div>
+                <span class="pill pill-accent">Smart AI</span>
+              </div>
+              <h3>Personalized Meal Planning</h3>
+              <p>Get recipe suggestions based on your inventory, dietary goals, and cuisine preferences.</p>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="feature-card h-100">
+              <div class="icon-placeholder" aria-hidden="true">🤝</div>
+              <h3>Donation & Sharing</h3>
+              <p>Easily donate surplus food and find nearby items using integrated maps and availability tracking.</p>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="feature-card h-100">
+              <div class="icon-placeholder" aria-hidden="true">⏰</div>
+              <h3>Expiry Alerts</h3>
+              <p>Get notified 3 days, 1 day, and on expiry to reduce waste and prioritize usage.</p>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="feature-card h-100">
+              <div class="icon-placeholder" aria-hidden="true">📊</div>
+              <h3>Analytics Dashboard</h3>
+              <p>Track food wastage, cost savings, environmental impact, and consumption patterns over time.</p>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="feature-card h-100">
+              <div class="icon-placeholder" aria-hidden="true">👨‍👩‍👧‍👦</div>
+              <h3>User Profile & Multi-User Support</h3>
+              <p>Set dietary preferences, allergies, and allow family members to share one household inventory.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="stats">
+      <h2>Our Impact in Numbers</h2>
+      <div class="container">
+        <div class="row text-center g-3">
+          <div class="col-6 col-md-3">
+            <div class="stat">
+              <i class="fa-solid fa-users stat-icon" aria-hidden="true"></i>
+              <div class="num">10k+</div>
+              <div class="label">Active users</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="stat">
+              <i class="fa-solid fa-leaf stat-icon" aria-hidden="true"></i>
+              <div class="num">1.8 Tons</div>
+              <div class="label">CO₂e saved</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="stat">
+              <i class="fa-solid fa-trash-arrow-up stat-icon" aria-hidden="true"></i>
+              <div class="num">55%</div>
+              <div class="label">Less food wastage</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="stat">
+              <i class="fa-solid fa-dollar-sign stat-icon" aria-hidden="true"></i>
+              <div class="num">$420k</div>
+              <div class="label">Total groceries savings </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Corporate Donation -->
+    <section class="corporate-donation">
+      <div class="container">
+        <div class="row g-4 align-items-start">
+          <div class="col-12 col-lg-6">
+            <div class="corp-text">
+              <h2>Corporate Donation</h2>
+              <p>If you share the same vision with us and wish to connect or collaborate, please fill out the connect
+                form so we can get back to you and better serve the community.</p>
+
+              <div class="corp-button mb-3">
+                <button class="btn-toggle" @click="showForm = !showForm">{{ showForm ? 'Close Form' : 'Connect'
+                  }}</button>
+              </div>
+
+              <div v-if="showForm" class="corp-form">
+                <form @submit.prevent="submitForm">
+                  <div class="mb-3">
+                    <label for="name" class="form-label fw-bold">Company Name</label>
+                    <input id="name" type="text" class="form-control shadow-none" required />
+                    <small class="text-muted">We reserve the right to ignore inappropriate submissions.</small>
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="email" class="form-label fw-bold">Email Address</label>
+                    <input id="email" type="email" class="form-control shadow-none" placeholder="Enter your email"
+                      required />
+                    <small class="text-muted">We will never share your email with anyone else.</small>
+                  </div>
+
+                  <button type="submit" class="btn-submit">Submit</button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-6">
+            <div class="corp-image">
+              <img src="../assets/corporate.jpg" class="img-fluid rounded-4" alt="Corporate support" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ (simple dedicated section) -->
+    <section id="faq" class="faq-simple">
+      <div class="container">
+        <h2 class="text-center mb-3">Frequently Asked Questions</h2>
+        <p class="text-center text-muted mb-4">Quick answers about Eco Pantry, donations, and the app.</p>
+
+        <div class="accordion" id="faqAccordionSimple">
+          <!-- 1 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q1">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#a1"
+                aria-expanded="true">
+                Who can donate through Eco Pantry?
+              </button>
+            </h2>
+            <div id="a1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                Food retailers, wholesalers, farms, corporate canteens, and verified community groups with surplus food.
+              </div>
+            </div>
+          </div>
+
+          <!-- 2 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q2">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a2">
+                What items are accepted?
+              </button>
+            </h2>
+            <div id="a2" class="accordion-collapse collapse" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                Shelf-stable, chilled, and fresh items within safe consumption windows. We guide handling, storage, and
+                category restrictions.
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q3">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a3">
+                How do pickups or deliveries work?
+              </button>
+            </h2>
+            <div id="a3" class="accordion-collapse collapse" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                Donors set pickup windows and notes; recipients confirm in-app. In selected areas, optional courier
+                partners are available at cost.
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q4">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a4">
+                Are there any fees?
+              </button>
+            </h2>
+            <div id="a4" class="accordion-collapse collapse" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                Listing and claiming donations is free. Delivery, cold-chain or special handling—if used—may incur
+                pass-through charges.
+              </div>
+            </div>
+          </div>
+
+          <!-- 5 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q5">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a5">
+                How do expiry alerts and recipe suggestions work?
+              </button>
+            </h2>
+            <div id="a5" class="accordion-collapse collapse" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                We track item dates and notify you 3 days, 1 day, and on expiry. The planner suggests “cook-now” recipes
+                using items expiring soon.
+              </div>
+            </div>
+          </div>
+
+          <!-- 6 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q6">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a6">
+                What about data privacy?
+              </button>
+            </h2>
+            <div id="a6" class="accordion-collapse collapse" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                We store the minimum data required, never sell personal info, and let you export or delete your account
+                anytime from Settings.
+              </div>
+            </div>
+          </div>
+
+          <!-- 7 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q7">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a7">
+                How do companies run a donation campaign?
+              </button>
+            </h2>
+            <div id="a7" class="accordion-collapse collapse" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                Submit the corporate form with your campaign name, locations, and volume estimates. We set up contacts
+                and reporting for you.
+              </div>
+            </div>
+          </div>
+
+          <!-- 8 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="q8">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a8">
+                How do I get support?
+              </button>
+            </h2>
+            <div id="a8" class="accordion-collapse collapse" data-bs-parent="#faqAccordionSimple">
+              <div class="accordion-body">
+                Use the in-app Help, email support, or our contact form. We typically respond within 2 business days.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials">
+      <div class="container">
+        <div class="t-wrap text-center">
+          <h2 class="t-title">Why People love Eco Pantry</h2>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="t-card d-flex flex-column h-100">
+              <div>
+                <div class="t-stars" aria-label="5 out of 5 stars">★★★★★</div>
+                <p class="t-quote">“Affordable and efficient. The <strong>real-time ingredient tracking</strong> plus
+                  <strong>expiry alerts</strong> stopped my ‘forgotten veggie’ problem. I’m saving money and binning
+                  less every week.”
+                </p>
+              </div>
+              <div class="t-author mt-auto d-flex align-items-center gap-2">
+                <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=SunnyChef"
+                  alt="Cartoon avatar of a happy chef" />
+                <div>
+                  <div class="t-name">Jasmine</div>
+                  <div class="t-role">Home cook & reseller</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="t-card d-flex flex-column h-100">
+              <div>
+                <div class="t-stars" aria-label="5 out of 5 stars">★★★★★</div>
+                <p class="t-quote">“The <strong>Smart-inventory</strong> is brilliant. It suggests <strong>use-now
+                    recipes</strong> for items expiring soon, so stock rotates naturally without me thinking.”</p>
+              </div>
+              <div class="t-author mt-auto d-flex align-items-center gap-2">
+                <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=ShopOwnerSue"
+                  alt="Cartoon avatar of a shop owner" />
+                <div>
+                  <div class="t-name">Jonathan</div>
+                  <div class="t-role">Small business owner</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="t-card d-flex flex-column h-100">
+              <div>
+                <div class="t-stars" aria-label="5 out of 5 stars">★★★★★</div>
+                <p class="t-quote">“A total game changer! Our household shares one pantry via <strong>multi-user
+                    profiles</strong>, and the <strong>donation map</strong> makes it easy to list extras. The
+                  <strong>analytics</strong> show real savings and CO₂e reduced.”
+                </p>
+              </div>
+              <div class="t-author mt-auto d-flex align-items-center gap-2">
+                <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=CreatorJake"
+                  alt="Cartoon avatar of a content creator" />
+                <div>
+                  <div class="t-name">Ashley</div>
+                  <div class="t-role">Content creator</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div> <!-- /row -->
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer-min text-center py-4">
+      <p class="mb-0">&copy; 2025 Eco Pantry — All Rights Reserved</p>
+    </footer>
+  </div>
+</template>
+
+<script>
+import "./Loading.css"
 export default {
   name: "FoodSaverLanding",
   data() {
@@ -236,224 +408,8 @@ export default {
     },
     scrollToTop() {
       window.scrollTo({ top: 0, behavior: "smooth" });
-    },
-    login() {
-      this.$router.push("/login")
     }
   }
 };
 </script>
 
-    <style scoped>
-
-    .feature-icon{
-      width: 48px;
-      height: 48px;
-      object-fit: contain;
-    }
-      .page {
-        min-height: 100vh;
-        background-color: #f9fafb;
-        display: flex;
-        flex-direction: column;
-        font-family: "Segoe UI", Roboto, sans-serif;
-        color: #333;
-      }
-
-      /* Hero */
-      .hero {
-        background-color: #16a34a;
-        color: #fff;
-        padding: 5rem 1.5rem;
-      }
-
-      .hero h1 {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-      }
-
-      .hero p {
-        font-size: 1.125rem;
-        max-width: 600px;
-        margin: 0 auto 2rem;
-      }
-
-      .btn {
-        background-color: #fff;
-        color: #15803d;
-        font-weight: 600;
-        padding: 0.5rem 1.5rem;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: background-color .2s;
-      }
-
-      .btn:hover {
-        background-color: #f3f4f6;
-      }
-
-      /* Features */
-      .features {
-        padding: 4rem 1.5rem;
-      }
-
-      .features h2 {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 2rem;
-      }
-
-      .feature-card {
-        background: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, .1);
-        padding: 1.5rem;
-        text-align: left;
-        transition: box-shadow .2s;
-      }
-
-      .feature-card:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
-      }
-
-      .icon-placeholder {
-        font-size: 2rem;
-        margin-bottom: .75rem;
-      }
-
-      /* Corporate Donation */
-      .corporate-donation {
-        padding: 3rem 1.5rem;
-      }
-
-      .corp-text h2 {
-        font-size: 1.75rem;
-        color: #14532d;
-        margin-bottom: .75rem;
-      }
-
-      .corp-text p {
-        color: #334155;
-        margin-bottom: 1rem;
-      }
-
-      .btn-toggle {
-        background-color: #16a34a;
-        color: #fff;
-        border: none;
-        border-radius: 6px;
-        padding: .55rem 1.05rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color .2s;
-      }
-
-      .btn-toggle:hover {
-        background-color: #15803d;
-      }
-
-      .corp-form {
-        background: #fff;
-        border-radius: 12px;
-        padding: 1.25rem;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, .06);
-        max-width: 520px;
-      }
-
-      .btn-submit {
-        background-color: #16a34a;
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        padding: .55rem 1.1rem;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .btn-submit:hover {
-        background-color: #15803d;
-      }
-
-      /* Testimonials */
-      .testimonials {
-        background: #fff;
-        padding: 4rem 1.5rem 3rem;
-      }
-
-      .t-title {
-        font-size: clamp(1.8rem, 3.6vw, 3rem);
-        font-weight: 800;
-        color: #0f172a;
-        margin-bottom: 2rem;
-      }
-
-      .t-card {
-        background: #f3f4f6;
-        border-radius: 18px;
-        padding: 1.25rem;
-        box-shadow: 0 1px 0 rgba(17, 24, 39, .02);
-      }
-
-      .t-stars {
-        letter-spacing: 2px;
-        color: #f4b000;
-        font-size: 1.1rem;
-        margin-bottom: .75rem;
-      }
-
-      .t-quote {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: #0f172a;
-        line-height: 1.55;
-        margin-bottom: 1rem;
-      }
-
-      .t-author img {
-        width: 42px;
-        height: 42px;
-        border-radius: 50%;
-        background: #fff;
-      }
-
-      /* Footer */
-      .footer-new {
-        background: #15803d;
-        color: #fff;
-        padding: 2rem 1.5rem 1.25rem;
-        text-align: center;
-        margin-top: auto;
-      }
-
-      .footer-new hr {
-        height: 1px;
-        border: 0;
-        background: rgba(255, 255, 255, .2);
-      }
-
-      #scrollTop {
-        position: fixed;
-        bottom: 20px;
-        right: 25px;
-        background: #16a34a;
-        border: none;
-        border-radius: 50%;
-        width: 45px;
-        height: 45px;
-        color: #fff;
-        cursor: pointer;
-        font-size: 1.25rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        transition: background-color .2s, transform .2s;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, .2);
-      }
-
-      #scrollTop:hover {
-        background: #15803d;
-        transform: translateY(-3px);
-      }
-    </style>
