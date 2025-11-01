@@ -14,47 +14,42 @@
     // UI states
     const sortBy = ref('alphabetical')
     const sortLabel = computed(() => sortBy.value === 'expiry' ? 'Expiring Soon' : 'Alphabetical (A–Z)')
-    const searchQuery = ref('') // Placeholder for upcoming feature
+    const searchQuery = ref('')
 
     // Filter 
     const selectedCategories = ref([]) // Which categories are checked
     const availableCategories = computed(() => {
-    // Extract unique categories from current inventory
-    const all = inventory.value.map(i => i.category).filter(Boolean)
-    return [...new Set(all)].sort()
+        // Extract unique categories from current inventory
+        const all = inventory.value.map(i => i.category).filter(Boolean)
+        return [...new Set(all)].sort()
     })
     
-    // Computed: Sort logic
-    const sortedInventory = computed(() => {
-        if (sortBy.value === 'alphabetical') {
-            let list = [...inventory.value]
+    // Computed: Filter + Sort + Search combined
+    const filteredInventory = computed(() => {
+        let list = [...inventory.value]
 
-            // Apply category filter (if any selected)
-            if (selectedCategories.value.length > 0) {
+        // Apply category filter (if any selected)
+        if (searchQuery.value.trim() !== '') {
+            const q = searchQuery.value.trim().toLowerCase()
+            list = list.filter(item => item.name.toLowerCase().includes(q))
+        }
+
+        // Apply category filter
+        if (selectedCategories.value.length > 0) {
             list = list.filter(item => selectedCategories.value.includes(item.category))
-            }
+        }
 
-            // Sort logic
-            if (sortBy.value === 'alphabetical') {
+        // Apply sorting
+        if (sortBy.value === 'alphabetical') {
             list.sort((a, b) => a.name.localeCompare(b.name))
-            } else if (sortBy.value === 'expiry') {
-            list.sort((a, b) => {
-                const earliestA = Math.min(...a.batches.map(b => new Date(b.expiryDate)))
-                const earliestB = Math.min(...b.batches.map(b => new Date(b.expiryDate)))
-                return earliestA - earliestB
-            })
-            }
-
-            return list
         } else if (sortBy.value === 'expiry') {
-            // Sort by earliest batch expiry date
-            return [...inventory.value].sort((a, b) => {
-                const earliestA = Math.min(...a.batches.map(b => new Date(b.expiryDate)))
-                const earliestB = Math.min(...b.batches.map(b => new Date(b.expiryDate)))
-                return earliestA - earliestB
+            list.sort((a, b) => {
+            const earliestA = Math.min(...a.batches.map(b => new Date(b.expiryDate)))
+            const earliestB = Math.min(...b.batches.map(b => new Date(b.expiryDate)))
+            return earliestA - earliestB
             })
         }
-        return inventory.value
+    return list
     })
 
     // Change sorting method
@@ -257,7 +252,7 @@
         </div>
 
         <!-- Inventory Cards -->
-        <div v-for="item in sortedInventory" :key="item.id" class="card mb-3 shadow-sm">
+        <div v-for="item in filteredInventory" :key="item.id" class="card mb-3 shadow-sm">
             <div class="card-body">
                 <h5 class="card-title">{{ item.name }}</h5>
                 <p class="mb-1"><strong>Category:</strong> {{ item.category }}</p>
