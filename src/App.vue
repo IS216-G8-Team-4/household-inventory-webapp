@@ -14,8 +14,10 @@ const router = useRouter();
 const session = ref(null);
 const showMenu = ref(false);
 const activeProfileId = ref(null);
+const avatarUrl = ref("/avatars/default.png"); // 🌿 Default avatar
+const originalAvatar = ref("/avatars/default.png"); // used to restore on cancel
 
-// Fetch active profile
+// Fetch active profile (with avatar)
 const fetchActiveProfile = async () => {
   if (!session.value) return;
 
@@ -31,12 +33,19 @@ const fetchActiveProfile = async () => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, avatar_url")
     .eq("household_id", householdId)
     .eq("is_active", true)
     .maybeSingle();
 
   activeProfileId.value = profile?.id || null;
+
+  const newAvatar = profile?.avatar_url
+    ? `/avatars/${profile.avatar_url}`
+    : "/avatars/default.png";
+
+  avatarUrl.value = newAvatar;
+  originalAvatar.value = newAvatar; // store to revert if needed
 };
 
 // Check user session on mount
@@ -52,18 +61,39 @@ onMounted(async () => {
     if (sess) {
       fetchActiveProfile();
     } else {
-      // ✅ automatically redirect guest back to Loading
+      // ✅ Automatically redirect guest back to Loading
       router.push("/Loading");
     }
   });
 
-  // Listen for active profile changes
+  // 🔹 Listen for active profile changes
   window.addEventListener("activeProfileChanged", (e) => {
     activeProfileId.value = e.detail?.newActiveId || null;
   });
+
+  // 🔹 Listen for avatar PREVIEW (temporary, before saving)
+  window.addEventListener("avatarPreview", (e) => {
+    avatarUrl.value = e.detail?.newAvatarUrl
+      ? `/avatars/${e.detail.newAvatarUrl}`
+      : "/avatars/default.png";
+  });
+
+  // 🔹 Listen for avatar UPDATED (permanent save)
+  window.addEventListener("avatarUpdated", (e) => {
+    const newUrl = e.detail?.newAvatarUrl
+      ? `/avatars/${e.detail.newAvatarUrl}`
+      : "/avatars/default.png";
+    avatarUrl.value = newUrl;
+    originalAvatar.value = newUrl; // update base avatar
+  });
+
+  // 🔹 Listen for avatar CANCEL (restore to original)
+  window.addEventListener("avatarCancel", () => {
+    avatarUrl.value = originalAvatar.value;
+  });
 });
 
-// log out 
+// Logout logic
 const logout = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -76,14 +106,17 @@ const logout = async () => {
 
       if (updateError) throw updateError;
     }
+
     await supabase.auth.signOut();
 
     // Clear session-related state
     session.value = null;
     activeProfileId.value = null;
     showMenu.value = false;
+    avatarUrl.value = "/avatars/default.png";
+    originalAvatar.value = "/avatars/default.png";
 
-    // Force redirect after logout (avoids race condition)
+    // Redirect after logout
     router.replace("/Loading");
   } catch (error) {
     console.error("Logout failed:", error.message);
@@ -114,12 +147,12 @@ const toggleMenu = () => {
   <!-- Bootstrap Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm sticky-top">
     <div class="container-fluid">
-      <!-- 🌿 Brand (links to Loading page) -->
+      <!-- 🌿 Brand -->
       <RouterLink class="navbar-brand eco-brand fw-bold" to="/Loading">
         Eco Pantry
       </RouterLink>
 
-      <!-- Toggler for mobile view -->
+      <!-- Toggler for mobile -->
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
         aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -128,7 +161,6 @@ const toggleMenu = () => {
       <!-- Navbar Links -->
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto align-items-center">
-
           <!-- Guest-only -->
           <template v-if="!session">
             <li class="nav-item">
@@ -159,15 +191,27 @@ const toggleMenu = () => {
 
           <!-- User dropdown -->
           <li v-if="session" class="nav-item dropdown position-relative">
-            <img src="../assets/user-icon.png" alt="User" class="user-icon" @click="toggleMenu" />
+            <img :src="avatarUrl" alt="User Avatar" class="user-icon" @click="toggleMenu" />
             <ul v-show="showMenu"
               class="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-sm border-0">
-              <li><button class="dropdown-item" @click="goTo('/ProfileList')">👤 Manage Profiles</button></li>
-              <li><button class="dropdown-item" @click="goToProfileSettings">⚙️ Settings</button></li>
+              <li>
+                <button class="dropdown-item" @click="goTo('/ProfileList')">
+                  👤 Manage Profiles
+                </button>
+              </li>
+              <li>
+                <button class="dropdown-item" @click="goToProfileSettings">
+                  ⚙️ Settings
+                </button>
+              </li>
               <li>
                 <hr class="dropdown-divider" />
               </li>
-              <li><button class="dropdown-item text-danger" @click="logout">🚪 Logout</button></li>
+              <li>
+                <button class="dropdown-item text-danger" @click="logout">
+                  🚪 Logout
+                </button>
+              </li>
             </ul>
           </li>
         </ul>
@@ -180,10 +224,8 @@ const toggleMenu = () => {
 </template>
 
 <style scoped>
-/* 🌿 Brand color styling */
 .eco-brand {
   color: #2e7d32 !important;
-  /* deep green */
   font-size: 1.4rem;
   letter-spacing: 0.3px;
   transition: color 0.25s ease;
@@ -191,31 +233,32 @@ const toggleMenu = () => {
 
 .eco-brand:hover {
   color: #1b5e20 !important;
-  /* darker green hover */
   text-decoration: none;
 }
 
-/* Highlight active route */
+/* Active route highlight */
 .router-link-active {
   font-weight: 600;
   color: #0d6efd !important;
 }
 
-/* User Icon Styling */
+/* Avatar styles */
 .user-icon {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   cursor: pointer;
-  margin-left: 10px;
+  margin-left: 12px;
   transition: transform 0.2s;
+  border: 2px solid #2e7d32;
+  object-fit: cover;
 }
 
 .user-icon:hover {
   transform: scale(1.1);
 }
 
-/* Dropdown fix */
+/* Dropdown styling */
 .dropdown-menu {
   right: 0;
   left: auto;
