@@ -550,11 +550,11 @@ export default {
 
       <!-- usage trends -->
       <section class="card fade-in">
-        <h3>Usage Trends</h3>
+        <h3>Tips</h3>
         
         <div class="trends-grid">
           <!-- weekly change -->
-          <div class="trend-card">
+          <!-- <div class="trend-card">
             <div class="trend-icon" :class="weeklyTrend">
               <span v-if="weeklyTrend === 'up'">📈</span>
               <span v-else-if="weeklyTrend === 'down'">📉</span>
@@ -567,37 +567,37 @@ export default {
               </div>
               <div class="trend-sublabel">vs last week</div>
             </div>
-          </div>
+          </div> -->
 
           <!-- most consumed -->
-          <div class="trend-card">
+          <!-- <div class="trend-card">
             <div class="trend-icon star">🌟</div>
             <div class="trend-content">
               <div class="trend-label">Most Consumed</div>
               <div class="trend-value">{{ usageTrends.mostConsumed }}</div>
               <div class="trend-sublabel">this month</div>
             </div>
-          </div>
+          </div> -->
 
           <!-- fastest category -->
-          <div class="trend-card">
+          <!-- <div class="trend-card">
             <div class="trend-icon fast">⚡</div>
             <div class="trend-content">
               <div class="trend-label">Top Category</div>
               <div class="trend-value">{{ usageTrends.fastestCategory }}</div>
               <div class="trend-sublabel">most used</div>
             </div>
-          </div>
+          </div> -->
 
           <!-- shopping frequency -->
-          <div class="trend-card">
+          <!-- <div class="trend-card">
             <div class="trend-icon shop">🛒</div>
             <div class="trend-content">
               <div class="trend-label">Shopping</div>
               <div class="trend-value">{{ usageTrends.shoppingFrequency }}</div>
               <div class="trend-sublabel">average</div>
             </div>
-          </div>
+          </div> -->
         </div>
 
         <div class="tip">
