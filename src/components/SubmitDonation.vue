@@ -2,15 +2,15 @@
 import { ref, onMounted } from 'vue'
 import { createClient } from '@supabase/supabase-js'
 
-/* ===== Supabase config ===== */
+// connection to supabase
 const SUPABASE_URL = 'https://mtaoplgrwgihghbdzquk.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10YW9wbGdyd2dpaGdoYmR6cXVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0MTA4NDUsImV4cCI6MjA3NTk4Njg0NX0.qPysjEkDHhy0o6AkyE54tzOELuOZLuLR_G5wKE8ek-w'
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-/* ===== Google Maps key ===== */
+// google maps key
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
 
-
+// hold input data from donation form 
 const form = ref({
   item_name: '',
   description: '',
@@ -19,9 +19,9 @@ const form = ref({
   unit_number: '',
   postal_code: '',
 })
+
+// variables 
 const donations = ref([])
-
-
 const isLoadingPins = ref(false)
 const isSubmitting = ref(false)
 const alertMsg = ref('')
@@ -34,6 +34,7 @@ let geocoder = null
 let info = null
 let markers = []
 
+// loads google map
 function loadGoogle() {
   return new Promise((resolve, reject) => {
     if (window.google?.maps) return resolve()
@@ -46,10 +47,11 @@ function loadGoogle() {
   })
 }
 
+  // create map instance
 function initMap(center = { lat: 1.3521, lng: 103.8198 }) {
   map = new google.maps.Map(mapEl.value, { center, zoom: 12, mapTypeControl: false })
-  geocoder = new google.maps.Geocoder()
-  info = new google.maps.InfoWindow()
+  geocoder = new google.maps.Geocoder() // convert address into latitude and longitude
+  info = new google.maps.InfoWindow() //shows popups when clicking pins 
 }
 
 function clearMarkers() {
@@ -57,6 +59,7 @@ function clearMarkers() {
   markers = []
 }
 
+  // takes donation address and makes it map coordinates 
 function geocodeByAddress(d) {
   return new Promise((resolve) => {
     const full = [d.Address, d.Unit_Number, d.Postal_Code, 'Singapore'].filter(Boolean).join(', ')
@@ -71,6 +74,7 @@ function geocodeByAddress(d) {
   })
 }
 
+// donation marker 
 function pinDonation(d, latLng) {
   const marker = new google.maps.Marker({ position: latLng, map })
   marker.addListener('click', () => {
@@ -88,7 +92,7 @@ function pinDonation(d, latLng) {
   markers.push(marker)
 }
 
-/* ===== Supabase fetch & pin ===== */
+// fetch donation from supabase
 const fetchDonations = async () => {
   const { data, error } = await supabase
     .from('donation_submissions')
@@ -100,16 +104,16 @@ const fetchDonations = async () => {
 
 async function renderPins() {
   if (!map) initMap()
-  clearMarkers()
+  clearMarkers() //clear old pins
   isLoadingPins.value = true
   for (const d of donations.value) {
-    const loc = await geocodeByAddress(d)
-    if (loc) pinDonation(d, loc)
+    const loc = await geocodeByAddress(d) // geocode donation address
+    if (loc) pinDonation(d, loc) //adds new marker for each donation 
   }
   isLoadingPins.value = false
 }
 
-/* ===== Submit donation===== */
+// submit donations to supabase
 const submitDonation = async () => {
   try {
     isSubmitting.value = true
@@ -139,7 +143,8 @@ const submitDonation = async () => {
   }
 }
 
-/* ===== Lifecycle ===== */
+
+// when page first loads
 onMounted(async () => {
   try {
     await loadGoogle()
