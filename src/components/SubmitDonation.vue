@@ -113,23 +113,6 @@ async function renderPins() {
 const submitDonation = async () => {
   try {
     isSubmitting.value = true
-    let image_url = null
-
-    if (form.value.image) {
-      const file = form.value.image
-      const fileName = `${Date.now()}-${file.name}`
-      const { error: storageError } = await supabase
-        .storage
-        .from('donation-images')
-        .upload(fileName, file)
-      if (storageError) throw storageError
-
-      const { data: publicUrl } = supabase
-        .storage
-        .from('donation-images')
-        .getPublicUrl(fileName)
-      image_url = publicUrl?.publicUrl || null
-    }
 
     const { error } = await supabase.from('donation_submissions').insert([{
       Item_Name: form.value.item_name,
@@ -262,10 +245,7 @@ const requestDonation = async (id) => {
 
         <div v-for="donation in donations" :key="donation.id" class="card mb-3 shadow-sm">
           <div class="row g-0">
-            <div class="col-md-4" v-if="donation.image_url">
-              <img :src="donation.image_url" class="img-fluid rounded-start" alt="donation" style="object-fit: cover; height: 100%; min-height: 180px;">
-            </div>
-            <div :class="donation.image_url ? 'col-md-8' : 'col-12'">
+            <div class="col-12">
               <div class="card-body">
                 <h5 class="card-title mb-1">{{ donation.Item_Name }}</h5>
                 <p class="card-text mb-2">{{ donation.Item_Desc }}</p>
