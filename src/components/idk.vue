@@ -4,8 +4,8 @@ import { supabase } from '@/lib/supabase.js'
 export default {
     data() {
         return {
-            session: null,
-            householdId: null,
+            session: null,          // NEW: Store current session
+            householdId: null,      // Changed from hardcoded to dynamic
             inventory: [],
             expiringIngredients: [],
             recipes: [],
@@ -13,14 +13,16 @@ export default {
             loading: false,
             error: null,
             
+            // Filter options
             filters: {
                 cuisine: '',
                 maxTime: '',
                 dietaryPreference: '',
                 searchQuery: '',
-                useExpiringOnly: false
+                useExpiringOnly: false  // NEW: Filter for expiring ingredients
             },
             
+            // Available filter options
             cuisines: ['American', 'British', 'Canadian', 'Chinese', 'Croatian', 'Dutch', 
                       'Egyptian', 'French', 'Greek', 'Indian', 'Irish', 'Italian', 'Jamaican', 
                       'Japanese', 'Kenyan', 'Malaysian', 'Mexican', 'Moroccan', 'Polish', 
@@ -30,11 +32,13 @@ export default {
             
             selectedRecipe: null,
             
+            // Use Recipe feature
             showUseRecipeConfirmation: false,
             recipeToUse: null,
             ingredientsToDeduct: [],
             usingRecipe: false,
             
+            // Undo feature
             showUndoNotification: false,
             undoTimer: null,
             lastDeduction: null
@@ -42,14 +46,17 @@ export default {
     },
     
     computed: {
+        // Get all available ingredients from inventory
         availableIngredients() {
             return this.inventory.map(item => item.name.toLowerCase())
         },
         
+        // Get expiring ingredients (within 7 days)
         expiringIngredientNames() {
             return this.expiringIngredients.map(item => item.name.toLowerCase())
         },
         
+        // Calculate match percentage for each recipe
         recipesWithMatch() {
             return this.recipes.map(recipe => {
                 const recipeIngredients = this.extractRecipeIngredients(recipe)
@@ -59,6 +66,7 @@ export default {
                     )
                 )
                 
+                // NEW: Check which matched ingredients are expiring
                 const expiringMatchedIngredients = matchedIngredients.filter(ing =>
                     this.expiringIngredientNames.some(expiring =>
                         expiring.includes(ing.toLowerCase()) || ing.toLowerCase().includes(expiring)
@@ -77,11 +85,12 @@ export default {
                     ...recipe,
                     matchPercentage,
                     matchedIngredients,
-                    expiringMatchedIngredients,
+                    expiringMatchedIngredients,  // NEW
                     missingIngredients,
                     totalIngredients: recipeIngredients.length
                 }
             }).sort((a, b) => {
+                // NEW: Prioritize recipes with expiring ingredients
                 if (this.filters.useExpiringOnly) {
                     if (a.expiringMatchedIngredients.length !== b.expiringMatchedIngredients.length) {
                         return b.expiringMatchedIngredients.length - a.expiringMatchedIngredients.length
@@ -89,40 +98,11 @@ export default {
                 }
                 return b.matchPercentage - a.matchPercentage
             })
-        },
-        
-        // NEW: Sorted ingredients for modal display (available first, then missing)
-        sortedRecipeIngredients() {
-            if (!this.selectedRecipe) return []
-            
-            const recipeIngredients = this.extractRecipeIngredients(this.selectedRecipe)
-            const ingredientsWithStatus = recipeIngredients.map((ingredient, index) => {
-                const isAvailable = this.isIngredientAvailable(ingredient)
-                const isExpiring = this.isIngredientExpiring(ingredient)
-                const measure = this.getIngredientMeasure(this.selectedRecipe, index + 1)
-                
-                return {
-                    name: ingredient,
-                    measure: measure,
-                    index: index,
-                    isAvailable: isAvailable,
-                    isExpiring: isExpiring,
-                    // Sort priority: expiring first (0), available (1), missing (2)
-                    sortOrder: isExpiring ? 0 : (isAvailable ? 1 : 2)
-                }
-            })
-            
-            // Sort by sortOrder, then alphabetically
-            return ingredientsWithStatus.sort((a, b) => {
-                if (a.sortOrder !== b.sortOrder) {
-                    return a.sortOrder - b.sortOrder
-                }
-                return a.name.localeCompare(b.name)
-            })
         }
     },
     
     methods: {
+        // NEW: Fetch current session (get user ID)
         async fetchSession() {
             try {
                 const { data, error } = await supabase.auth.getSession()
@@ -136,6 +116,7 @@ export default {
             }
         },
 
+        // NEW: Fetch householdId based on logged-in user
         async fetchHouseholdId() {
             if (!this.session) {
                 console.warn('No session available')
@@ -166,6 +147,7 @@ export default {
             }
         },
         
+        // Fetch inventory from Supabase
         async fetchInventory() {
             if (!this.householdId) {
                 console.warn('No household ID available for fetching inventory')
@@ -193,6 +175,7 @@ export default {
                 
                 if (error) throw error
                 
+                // Flatten the data structure
                 this.inventory = data.map(ingredient => ({
                     id: ingredient.id,
                     name: ingredient.name,
@@ -213,6 +196,7 @@ export default {
             }
         },
         
+        // Fetch expiring ingredients (within 7 days) - Updated to filter by household
         async fetchExpiringIngredients() {
             if (!this.householdId) {
                 console.warn('No household ID available for fetching expiring ingredients')
@@ -246,6 +230,7 @@ export default {
                 
                 if (error) throw error
                 
+                // Extract unique ingredients
                 const uniqueIngredients = new Map()
                 data.forEach(batch => {
                     if (batch.ingredient && !uniqueIngredients.has(batch.ingredient.id)) {
@@ -266,6 +251,7 @@ export default {
             }
         },
         
+        // Extract ingredients from recipe object
         extractRecipeIngredients(recipe) {
             const ingredients = []
             for (let i = 1; i <= 20; i++) {
@@ -277,10 +263,12 @@ export default {
             return ingredients
         },
         
+        // Get ingredient measurements
         getIngredientMeasure(recipe, index) {
             return recipe[`strMeasure${index}`] || ''
         },
         
+        // Fetch recipes based on available ingredients
         async fetchRecipesByIngredient(ingredient) {
             try {
                 const response = await fetch(
@@ -294,6 +282,7 @@ export default {
             }
         },
         
+        // Fetch full recipe details
         async fetchRecipeDetails(mealId) {
             try {
                 const response = await fetch(
@@ -307,6 +296,7 @@ export default {
             }
         },
         
+        // Load recipes based on filters
         async loadRecipes() {
             this.loading = true
             this.error = null
@@ -314,6 +304,7 @@ export default {
             try {
                 let recipes = []
                 
+                // If cuisine filter is selected, search by area
                 if (this.filters.cuisine) {
                     const response = await fetch(
                         `https://www.themealdb.com/api/json/v1/1/filter.php?a=${this.filters.cuisine}`
@@ -321,6 +312,7 @@ export default {
                     const data = await response.json()
                     const basicRecipes = data.meals || []
                     
+                    // Fetch details for each recipe
                     const detailPromises = basicRecipes.slice(0, 20).map(recipe => 
                         this.fetchRecipeDetails(recipe.idMeal)
                     )
@@ -341,8 +333,10 @@ export default {
                     recipes = recipes.filter(r => r !== null)
                     
                 } else {
+                    // Use available ingredients to find recipes
                     const recipeMap = new Map()
                     
+                    // Search for recipes with each available ingredient
                     for (const ingredient of this.availableIngredients.slice(0, 5)) {
                         const foundRecipes = await this.fetchRecipesByIngredient(ingredient)
                         for (const recipe of foundRecipes.slice(0, 10)) {
@@ -369,9 +363,11 @@ export default {
             }
         },
         
+        // Apply client-side filters
         applyFilters() {
             let filtered = this.recipesWithMatch
             
+            // Search filter
             if (this.filters.searchQuery) {
                 const query = this.filters.searchQuery.toLowerCase()
                 filtered = filtered.filter(recipe => 
@@ -379,10 +375,13 @@ export default {
                 )
             }
             
+            // Time filter
             if (this.filters.maxTime) {
-                // Placeholder for time filter
+                // Note: API doesn't provide cooking time, so this is a placeholder
+                // You might want to estimate based on complexity or skip this
             }
             
+            // NEW: Expiring ingredients filter
             if (this.filters.useExpiringOnly) {
                 filtered = filtered.filter(recipe => 
                     recipe.expiringMatchedIngredients.length > 0
@@ -392,6 +391,7 @@ export default {
             this.filteredRecipes = filtered
         },
         
+        // Clear all filters
         clearFilters() {
             this.filters = {
                 cuisine: '',
@@ -403,14 +403,17 @@ export default {
             this.applyFilters()
         },
         
+        // Show recipe details in modal
         showRecipeDetails(recipe) {
             this.selectedRecipe = recipe
         },
         
+        // Close recipe modal
         closeRecipeModal() {
             this.selectedRecipe = null
         },
         
+        // Get match badge class based on percentage
         getMatchClass(percentage) {
             if (percentage >= 80) return 'match-excellent'
             if (percentage >= 60) return 'match-good'
@@ -418,6 +421,7 @@ export default {
             return 'match-low'
         },
         
+        // Check if ingredient is available in inventory
         isIngredientAvailable(ingredientName) {
             return this.availableIngredients.some(avail => 
                 avail.includes(ingredientName.toLowerCase()) || 
@@ -425,6 +429,7 @@ export default {
             )
         },
         
+        // NEW: Check if ingredient is expiring
         isIngredientExpiring(ingredientName) {
             return this.expiringIngredientNames.some(expiring =>
                 expiring.includes(ingredientName.toLowerCase()) ||
@@ -432,27 +437,33 @@ export default {
             )
         },
         
+        // NEW: Prepare to use recipe - show confirmation
         async prepareUseRecipe(recipe) {
             this.recipeToUse = recipe
             this.ingredientsToDeduct = []
             
+            // Extract recipe ingredients and match with inventory
             const recipeIngredients = this.extractRecipeIngredients(recipe)
             
             for (let i = 0; i < recipeIngredients.length; i++) {
                 const ingredientName = recipeIngredients[i]
                 const measure = this.getIngredientMeasure(recipe, i + 1)
                 
+                // Find matching inventory item
                 const inventoryItem = this.inventory.find(item => 
                     item.name.toLowerCase().includes(ingredientName.toLowerCase()) ||
                     ingredientName.toLowerCase().includes(item.name.toLowerCase())
                 )
                 
+                // Extract quantity and unit from recipe measure
                 const quantityMatch = measure.match(/(\d+\.?\d*)/)
                 const quantity = quantityMatch ? parseFloat(quantityMatch[1]) : 1
                 
+                // Extract unit from measure (everything after the number)
                 const recipeUnit = measure.replace(/[\d\.\s]+/, '').trim().toLowerCase()
                 const inventoryUnit = inventoryItem ? inventoryItem.unit.toLowerCase() : ''
                 
+                // Check if units match or are compatible
                 const unitMatch = this.checkUnitCompatibility(recipeUnit, inventoryUnit)
                 
                 const isExpiring = inventoryItem ? this.isIngredientExpiring(inventoryItem.name) : false
@@ -462,16 +473,17 @@ export default {
                     measure: measure,
                     recipeUnit: recipeUnit,
                     quantity: quantity,
-                    editableQuantity: quantity,
+                    editableQuantity: quantity, // For user to edit
                     available: !!inventoryItem,
                     inventoryItem: inventoryItem,
                     inventoryUnit: inventoryUnit,
                     unitMatch: unitMatch,
-                    checked: !!inventoryItem,
+                    checked: !!inventoryItem, // Auto-check if available
                     isExpiring: isExpiring
                 })
             }
             
+            // Sort: Expiring first, then available, then missing
             this.ingredientsToDeduct.sort((a, b) => {
                 if (a.isExpiring && !b.isExpiring) return -1
                 if (!a.isExpiring && b.isExpiring) return 1
@@ -483,37 +495,46 @@ export default {
             this.showUseRecipeConfirmation = true
         },
         
+        // NEW: Check if recipe unit and inventory unit are compatible
         checkUnitCompatibility(recipeUnit, inventoryUnit) {
             if (!recipeUnit || !inventoryUnit) return 'unknown'
             
+            // Exact match
             if (recipeUnit === inventoryUnit) return 'exact'
             
+            // Weight units
             const weightUnits = ['kg', 'g', 'gram', 'grams', 'kilogram', 'kilograms', 'oz', 'lb', 'lbs', 'pound', 'pounds', 'ounce', 'ounces']
             const isRecipeWeight = weightUnits.some(u => recipeUnit.includes(u))
             const isInventoryWeight = weightUnits.some(u => inventoryUnit.includes(u))
             if (isRecipeWeight && isInventoryWeight) return 'compatible'
             
+            // Volume units
             const volumeUnits = ['l', 'ml', 'liter', 'liters', 'milliliter', 'milliliters', 'cup', 'cups', 'tbsp', 'tsp', 'tablespoon', 'teaspoon', 'fl oz', 'fluid ounce']
             const isRecipeVolume = volumeUnits.some(u => recipeUnit.includes(u))
             const isInventoryVolume = volumeUnits.some(u => inventoryUnit.includes(u))
             if (isRecipeVolume && isInventoryVolume) return 'compatible'
             
+            // Count units
             const countUnits = ['pcs', 'pc', 'piece', 'pieces', 'pack', 'packs', 'item', 'items', 'unit', 'units']
             const isRecipeCount = countUnits.some(u => recipeUnit.includes(u))
             const isInventoryCount = countUnits.some(u => inventoryUnit.includes(u))
             if (isRecipeCount && isInventoryCount) return 'compatible'
             
+            // No unit in recipe (just a number)
             if (!recipeUnit || recipeUnit === '') return 'compatible'
             
+            // Mismatch
             return 'mismatch'
         },
         
+        // NEW: Cancel use recipe
         cancelUseRecipe() {
             this.showUseRecipeConfirmation = false
             this.recipeToUse = null
             this.ingredientsToDeduct = []
         },
         
+        // NEW: Confirm and use recipe - deduct from inventory
         async confirmUseRecipe() {
             this.usingRecipe = true
             
@@ -525,8 +546,10 @@ export default {
                     deductions: []
                 }
                 
+                // Deduct only checked and available ingredients
                 for (const ingredient of this.ingredientsToDeduct) {
                     if (ingredient.checked && ingredient.available && ingredient.inventoryItem) {
+                        // Use the edited quantity instead of original
                         const deduction = await this.deductIngredientFromInventory(
                             ingredient.inventoryItem,
                             ingredient.editableQuantity
@@ -537,21 +560,26 @@ export default {
                     }
                 }
                 
+                // Store for undo
                 this.lastDeduction = deductionRecord
                 
+                // Refresh inventory
                 await this.fetchInventory()
                 await this.fetchExpiringIngredients()
                 
+                // Close confirmation and recipe modal
                 this.showUseRecipeConfirmation = false
                 this.closeRecipeModal()
                 
+                // Show undo notification
                 this.showUndoNotification = true
                 
+                // Auto-hide after 10 seconds
                 if (this.undoTimer) clearTimeout(this.undoTimer)
                 this.undoTimer = setTimeout(() => {
                     this.showUndoNotification = false
                     this.lastDeduction = null
-                }, 5000)
+                }, 10000)
                 
             } catch (error) {
                 console.error('Error using recipe:', error)
@@ -561,8 +589,10 @@ export default {
             }
         },
         
+        // NEW: Deduct ingredient from inventory (FIFO - oldest expiry first)
         async deductIngredientFromInventory(inventoryItem, quantityNeeded) {
             try {
+                // Sort batches by expiry date (oldest first)
                 const sortedBatches = [...inventoryItem.batches]
                     .filter(batch => batch.status === 'active' || !batch.status)
                     .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))
@@ -579,6 +609,7 @@ export default {
                         const deductAmount = Math.min(currentQuantity, remainingQuantity)
                         const newQuantity = currentQuantity - deductAmount
                         
+                        // Update batch in database
                         const { error } = await supabase
                             .from('ingredient_batches')
                             .update({ 
@@ -589,6 +620,7 @@ export default {
                         
                         if (error) throw error
                         
+                        // Record for undo
                         batchUpdates.push({
                             batchId: batch.id,
                             previousQuantity: currentQuantity,
@@ -614,12 +646,15 @@ export default {
             }
         },
         
+        // NEW: Undo recipe use
         async undoRecipeUse() {
             if (!this.lastDeduction) return
             
             try {
+                // Restore all deductions
                 for (const deduction of this.lastDeduction.deductions) {
                     for (const batchUpdate of deduction.batchUpdates) {
+                        // Restore previous quantity and status
                         const { error } = await supabase
                             .from('ingredient_batches')
                             .update({ 
@@ -632,12 +667,15 @@ export default {
                     }
                 }
                 
+                // Refresh inventory
                 await this.fetchInventory()
                 await this.fetchExpiringIngredients()
                 
+                // Hide notification
                 this.showUndoNotification = false
                 this.lastDeduction = null
                 
+                // Clear timer
                 if (this.undoTimer) {
                     clearTimeout(this.undoTimer)
                     this.undoTimer = null
@@ -651,6 +689,7 @@ export default {
             }
         },
         
+        // NEW: Dismiss undo notification
         dismissUndo() {
             this.showUndoNotification = false
             this.lastDeduction = null
@@ -662,6 +701,7 @@ export default {
     },
     
     watch: {
+        // Watch filters and reapply when changed
         filters: {
             handler() {
                 this.applyFilters()
@@ -669,6 +709,7 @@ export default {
             deep: true
         },
         
+        // NEW: Watch householdId and fetch data when it changes
         householdId(newVal) {
             if (newVal) {
                 this.fetchInventory()
@@ -677,10 +718,15 @@ export default {
         }
     },
     
+    // Modified: Load data in sequence
     async mounted() {
+        // Fetch session first
         await this.fetchSession()
+        
+        // Then fetch household ID
         await this.fetchHouseholdId()
         
+        // Then fetch inventory and expiring ingredients
         if (this.householdId) {
             await this.fetchInventory()
             await this.fetchExpiringIngredients()
@@ -691,6 +737,7 @@ export default {
         }
     },
     
+    // NEW: Cleanup timer on component destroy
     beforeUnmount() {
         if (this.undoTimer) {
             clearTimeout(this.undoTimer)
@@ -706,6 +753,7 @@ export default {
             <h1>Recipe Suggestions</h1>
             <p class="subtitle">Based on your available ingredients</p>
             
+            <!-- NEW: Show expiring ingredients alert if any -->
             <div v-if="expiringIngredients.length > 0" class="expiring-alert">
                 <strong>⚠️ {{ expiringIngredients.length }} ingredient(s) expiring soon!</strong>
                 <ul style="margin: 8px 0 0 20px; padding: 0;">
@@ -721,6 +769,7 @@ export default {
             <h3>Filter Recipes</h3>
             
             <div class="row g-3">
+                <!-- Search -->
                 <div class="col-md-6">
                     <label class="form-label">Search by name</label>
                     <input 
@@ -731,6 +780,7 @@ export default {
                     >
                 </div>
 
+                <!-- Cuisine -->
                 <div class="col-md-6">
                     <label class="form-label">Cuisine</label>
                     <select class="form-select" v-model="filters.cuisine" @change="loadRecipes">
@@ -741,6 +791,7 @@ export default {
                     </select>
                 </div>
 
+                <!-- Dietary Preference -->
                 <div class="col-md-6">
                     <label class="form-label">Dietary Preference</label>
                     <select class="form-select" v-model="filters.dietaryPreference" @change="loadRecipes">
@@ -751,6 +802,7 @@ export default {
                     </select>
                 </div>
 
+                <!-- Max Cooking Time -->
                 <div class="col-md-6">
                     <label class="form-label">Max Cooking Time (minutes)</label>
                     <input 
@@ -762,6 +814,7 @@ export default {
                     >
                 </div>
 
+                <!-- NEW: Expiring Ingredients Only -->
                 <div class="col-12">
                     <div class="form-check">
                         <input 
@@ -807,10 +860,12 @@ export default {
                 <div class="recipe-image-container">
                     <img :src="recipe.strMealThumb" :alt="recipe.strMeal" class="recipe-image">
                     
+                    <!-- Match Badge -->
                     <div class="match-badge" :class="getMatchClass(recipe.matchPercentage)">
                         {{ recipe.matchPercentage }}% Match
                     </div>
                     
+                    <!-- NEW: Expiring Ingredients Badge -->
                     <div v-if="recipe.expiringMatchedIngredients.length > 0" class="expiring-badge">
                         ⏰ Uses {{ recipe.expiringMatchedIngredients.length }} expiring
                     </div>
@@ -830,6 +885,7 @@ export default {
                             {{ recipe.totalIngredients }} ingredients available
                         </p>
                         
+                        <!-- NEW: Show expiring ingredients -->
                         <div v-if="recipe.expiringMatchedIngredients.length > 0" class="expiring-ingredients">
                             <small>
                                 <strong>⏰ Expiring soon:</strong>
@@ -854,13 +910,13 @@ export default {
             </div>
         </div>
 
-        <!-- ========== UPDATED RECIPE DETAIL MODAL (OPTION 1) ========== -->
+        <!-- Recipe Detail Modal -->
         <div v-if="selectedRecipe" class="recipe-modal" @click.self="closeRecipeModal">
             <div class="recipe-modal-content recipe-detail-modal-styled">
                 <button class="btn-close-modal" @click="closeRecipeModal">&times;</button>
                 
                 <div class="recipe-detail-layout-styled">
-                    <!-- Left Side: Recipe Image with Info Cards & BUTTONS -->
+                    <!-- Left Side: Recipe Image with Info Cards -->
                     <div class="recipe-detail-left">
                         <div class="recipe-image-wrapper">
                             <img 
@@ -884,22 +940,6 @@ export default {
                                 <p>{{ selectedRecipe.expiringMatchedIngredients.join(', ') }}</p>
                             </div>
                         </div>
-                        
-                        <!-- ACTION BUTTONS (OPTION 1) -->
-                        <div class="recipe-modal-actions-sidebar">
-                            <a v-if="selectedRecipe.strYoutube" 
-                               :href="selectedRecipe.strYoutube" 
-                               target="_blank" 
-                               class="btn btn-danger btn-sidebar">
-                                <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                </svg>
-                                Watch Video Tutorial
-                            </a>
-                            <button class="btn btn-success btn-sidebar" @click="prepareUseRecipe(selectedRecipe)">
-                                Use This Recipe
-                            </button>
-                        </div>
                     </div>
 
                     <!-- Right Side: Ingredients & Instructions -->
@@ -916,21 +956,21 @@ export default {
                             <h4 class="section-heading">Ingredients</h4>
                             <ul class="ingredients-list-styled">
                                 <li 
-                                    v-for="ingredient in sortedRecipeIngredients" 
-                                    :key="ingredient.index"
+                                    v-for="(ingredient, index) in extractRecipeIngredients(selectedRecipe)" 
+                                    :key="index"
                                     class="ingredient-item-styled"
                                     :class="{
-                                        'ingredient-available-styled': ingredient.isAvailable && !ingredient.isExpiring,
-                                        'ingredient-expiring-styled': ingredient.isExpiring,
-                                        'ingredient-missing-styled': !ingredient.isAvailable
+                                        'ingredient-available-styled': isIngredientAvailable(ingredient) && !isIngredientExpiring(ingredient),
+                                        'ingredient-expiring-styled': isIngredientExpiring(ingredient),
+                                        'ingredient-missing-styled': !isIngredientAvailable(ingredient)
                                     }"
                                 >
                                     <span class="ingredient-check-icon">
-                                        {{ ingredient.isExpiring ? '✓ 🔥' : 
-                                           ingredient.isAvailable ? '✓' : '✗' }}
+                                        {{ isIngredientExpiring(ingredient) ? '✓ 🔥' : 
+                                           isIngredientAvailable(ingredient) ? '✓' : '✗' }}
                                     </span>
                                     <span class="ingredient-text-styled">
-                                        {{ ingredient.measure }} {{ ingredient.name }}
+                                        {{ getIngredientMeasure(selectedRecipe, index + 1) }} {{ ingredient }}
                                     </span>
                                 </li>
                             </ul>
@@ -939,13 +979,29 @@ export default {
                             <div class="instructions-styled">
                                 {{ selectedRecipe.strInstructions }}
                             </div>
+                            
+                            <!-- Buttons at Bottom - Centered Inside Scroll -->
+                            <div class="recipe-modal-actions-centered">
+                                <a v-if="selectedRecipe.strYoutube" 
+                                   :href="selectedRecipe.strYoutube" 
+                                   target="_blank" 
+                                   class="btn btn-video-red">
+                                    <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                    </svg>
+                                    Watch Video Tutorial
+                                </a>
+                                <button class="btn btn-use-recipe-green" @click="prepareUseRecipe(selectedRecipe)">
+                                    Use This Recipe
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Use Recipe Confirmation Modal -->
+        <!-- Use Recipe Confirmation Modal - PRETTIER STYLING -->
         <div v-if="showUseRecipeConfirmation" class="recipe-modal" @click.self="cancelUseRecipe">
             <div class="recipe-modal-content use-recipe-modal-new">
                 <button class="btn-close-modal" @click="cancelUseRecipe">&times;</button>
@@ -1125,6 +1181,7 @@ export default {
     font-size: 1.1em;
 }
 
+/* NEW: Expiring ingredients alert */
 .expiring-alert {
     background: #fff3cd;
     border: 2px solid #ffc107;
@@ -1185,6 +1242,7 @@ export default {
     color: white;
 }
 
+/* NEW: Expiring badge */
 .expiring-badge {
     position: absolute;
     top: 45px;
@@ -1225,6 +1283,7 @@ export default {
     color: #666;
 }
 
+/* NEW: Expiring ingredients in summary */
 .expiring-ingredients {
     background: #fff3cd;
     padding: 8px;
@@ -1301,7 +1360,7 @@ export default {
     transform: scale(1.1);
 }
 
-/* ========== STYLED RECIPE DETAIL MODAL (OPTION 1) ========== */
+/* ========== STYLED RECIPE DETAIL MODAL (Reference Design) ========== */
 
 .recipe-detail-modal-styled {
     max-width: 1000px;
@@ -1310,26 +1369,19 @@ export default {
     overflow: hidden;
 }
 
-/* Override any Bootstrap or default button styles */
-.recipe-detail-left .btn-sidebar {
-    max-width: none !important;
-    flex-grow: 1 !important;
-}
-
 .recipe-detail-layout-styled {
     display: grid;
     grid-template-columns: 350px 1fr;
     min-height: 700px;
 }
 
-/* Left Side: Image, Cards, and Buttons */
+/* Left Side: Image and Cards */
 .recipe-detail-left {
     background: #f8f9fa;
-    padding: 20px;
+    padding: 25px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    align-items: stretch;
+    gap: 15px;
 }
 
 .recipe-image-wrapper {
@@ -1337,9 +1389,6 @@ export default {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    flex-shrink: 0;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .detail-recipe-image-styled {
@@ -1347,8 +1396,6 @@ export default {
     height: 250px;
     object-fit: cover;
     display: block;
-    margin: 0;
-    padding: 0;
 }
 
 /* Match Badge Card */
@@ -1359,9 +1406,6 @@ export default {
     color: white;
     text-align: center;
     box-shadow: 0 4px 12px rgba(255, 154, 86, 0.3);
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .match-card.match-excellent {
@@ -1406,19 +1450,11 @@ export default {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .expiring-icon {
     font-size: 1.8em;
     flex-shrink: 0;
-}
-
-.expiring-text {
-    flex: 1;
-    min-width: 0;
 }
 
 .expiring-text strong {
@@ -1433,67 +1469,6 @@ export default {
     font-size: 0.9em;
     margin: 0;
     line-height: 1.4;
-    word-wrap: break-word;
-}
-
-/* ========== ACTION BUTTONS IN SIDEBAR (OPTION 1) ========== */
-.recipe-modal-actions-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
-    align-items: stretch;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
-.btn-sidebar {
-    width: 100%;
-    padding: 14px 16px;
-    border-radius: 12px;
-    text-align: center;
-    font-weight: 600;
-    font-size: 0.95em;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    text-decoration: none;
-    box-sizing: border-box;
-    margin: 0;
-}
-
-.btn-sidebar.btn-danger {
-    background: #e52d27;
-    color: white;
-}
-
-.btn-sidebar.btn-danger:hover {
-    background: #c9221c;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
-    color: white;
-}
-
-.btn-sidebar.btn-success {
-    background: #28a745;
-    color: white;
-}
-
-.btn-sidebar.btn-success:hover {
-    background: #218838;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
-}
-
-.youtube-icon {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
 }
 
 /* Right Side: Content */
@@ -1523,7 +1498,7 @@ export default {
 
 .recipe-scrollable-content {
     flex: 1;
-    padding: 25px 30px 30px 30px;
+    padding: 25px 30px 0 30px;
     overflow-y: auto;
     max-height: calc(100vh - 350px);
     min-height: 450px;
@@ -1627,6 +1602,70 @@ export default {
     margin-bottom: 0;
 }
 
+/* Modal Actions - Centered Inside Scroll */
+.recipe-modal-actions-centered {
+    margin-top: 30px;
+    margin-bottom: 20px;
+    padding-top: 25px;
+    border-top: 2px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-video-red {
+    background: #e52d27;
+    color: white;
+    padding: 14px 30px;
+    border-radius: 8px;
+    text-decoration: none;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 250px;
+}
+
+.youtube-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.btn-video-red:hover {
+    background: #c9221c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
+    color: white;
+}
+
+.btn-use-recipe-green {
+    background: #28a745;
+    color: white;
+    padding: 14px 30px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-width: 250px;
+}
+
+.btn-use-recipe-green:hover {
+    background: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
 /* Responsive for styled modal */
 @media (max-width: 900px) {
     .recipe-detail-layout-styled {
@@ -1642,12 +1681,22 @@ export default {
     }
     
     .recipe-scrollable-content {
-        max-height: calc(100vh - 400px);
+        max-height: calc(100vh - 500px);
         min-height: 300px;
+    }
+    
+    .recipe-modal-actions-centered {
+        padding: 20px 0 0 0;
+    }
+    
+    .btn-video-red,
+    .btn-use-recipe-green {
+        width: 100%;
+        min-width: auto;
     }
 }
 
-/* ========== CONFIRMATION MODAL STYLES ========== */
+/* ========== NEW PRETTIER CONFIRMATION MODAL STYLES ========== */
 
 .use-recipe-modal-new {
     max-width: 900px;
@@ -1659,6 +1708,7 @@ export default {
     padding: 40px;
 }
 
+/* Header with Image */
 .confirmation-header {
     display: flex;
     justify-content: space-between;
@@ -1699,6 +1749,7 @@ export default {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+/* Match Info Card */
 .match-info-card {
     display: grid;
     grid-template-columns: auto 1fr;
@@ -1768,6 +1819,7 @@ export default {
     opacity: 0.95;
 }
 
+/* Ingredients Section */
 .ingredients-section-new {
     margin-bottom: 30px;
 }
@@ -1794,6 +1846,7 @@ export default {
     padding-right: 10px;
 }
 
+/* Custom Scrollbar */
 .ingredients-list-new::-webkit-scrollbar {
     width: 8px;
 }
@@ -1812,6 +1865,7 @@ export default {
     background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
 }
 
+/* Ingredient Cards */
 .ingredient-card {
     background: white;
     border-radius: 12px;
@@ -1955,6 +2009,7 @@ export default {
     font-size: 1.3em;
 }
 
+/* Action Buttons */
 .modal-actions-new {
     display: flex;
     gap: 15px;
@@ -2004,6 +2059,7 @@ export default {
     box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
+/* Responsive */
 @media (max-width: 768px) {
     .recipe-confirmation-layout-new {
         padding: 25px;

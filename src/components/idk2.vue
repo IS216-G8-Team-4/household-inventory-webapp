@@ -854,13 +854,13 @@ export default {
             </div>
         </div>
 
-        <!-- ========== UPDATED RECIPE DETAIL MODAL (OPTION 1) ========== -->
+        <!-- ========== UPDATED RECIPE DETAIL MODAL ========== -->
         <div v-if="selectedRecipe" class="recipe-modal" @click.self="closeRecipeModal">
             <div class="recipe-modal-content recipe-detail-modal-styled">
                 <button class="btn-close-modal" @click="closeRecipeModal">&times;</button>
                 
                 <div class="recipe-detail-layout-styled">
-                    <!-- Left Side: Recipe Image with Info Cards & BUTTONS -->
+                    <!-- Left Side: Recipe Image with Info Cards -->
                     <div class="recipe-detail-left">
                         <div class="recipe-image-wrapper">
                             <img 
@@ -883,22 +883,6 @@ export default {
                                 <strong>Expiring Ingredients</strong>
                                 <p>{{ selectedRecipe.expiringMatchedIngredients.join(', ') }}</p>
                             </div>
-                        </div>
-                        
-                        <!-- ACTION BUTTONS (OPTION 1) -->
-                        <div class="recipe-modal-actions-sidebar">
-                            <a v-if="selectedRecipe.strYoutube" 
-                               :href="selectedRecipe.strYoutube" 
-                               target="_blank" 
-                               class="btn btn-danger btn-sidebar">
-                                <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                </svg>
-                                Watch Video Tutorial
-                            </a>
-                            <button class="btn btn-success btn-sidebar" @click="prepareUseRecipe(selectedRecipe)">
-                                Use This Recipe
-                            </button>
                         </div>
                     </div>
 
@@ -938,6 +922,22 @@ export default {
                             <h4 class="section-heading">Instructions</h4>
                             <div class="instructions-styled">
                                 {{ selectedRecipe.strInstructions }}
+                            </div>
+                            
+                            <!-- UPDATED: Centered Buttons Inside Scroll -->
+                            <div class="recipe-modal-actions-centered">
+                                <a v-if="selectedRecipe.strYoutube" 
+                                   :href="selectedRecipe.strYoutube" 
+                                   target="_blank" 
+                                   class="btn btn-video-red">
+                                    <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                    </svg>
+                                    Watch Video Tutorial
+                                </a>
+                                <button class="btn btn-use-recipe-green" @click="prepareUseRecipe(selectedRecipe)">
+                                    Use This Recipe
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1301,7 +1301,7 @@ export default {
     transform: scale(1.1);
 }
 
-/* ========== STYLED RECIPE DETAIL MODAL (OPTION 1) ========== */
+/* ========== STYLED RECIPE DETAIL MODAL (Reference Design) ========== */
 
 .recipe-detail-modal-styled {
     max-width: 1000px;
@@ -1310,26 +1310,19 @@ export default {
     overflow: hidden;
 }
 
-/* Override any Bootstrap or default button styles */
-.recipe-detail-left .btn-sidebar {
-    max-width: none !important;
-    flex-grow: 1 !important;
-}
-
 .recipe-detail-layout-styled {
     display: grid;
     grid-template-columns: 350px 1fr;
     min-height: 700px;
 }
 
-/* Left Side: Image, Cards, and Buttons */
+/* Left Side: Image and Cards */
 .recipe-detail-left {
     background: #f8f9fa;
-    padding: 20px;
+    padding: 25px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    align-items: stretch;
+    gap: 15px;
 }
 
 .recipe-image-wrapper {
@@ -1337,9 +1330,6 @@ export default {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    flex-shrink: 0;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .detail-recipe-image-styled {
@@ -1347,8 +1337,6 @@ export default {
     height: 250px;
     object-fit: cover;
     display: block;
-    margin: 0;
-    padding: 0;
 }
 
 /* Match Badge Card */
@@ -1359,9 +1347,6 @@ export default {
     color: white;
     text-align: center;
     box-shadow: 0 4px 12px rgba(255, 154, 86, 0.3);
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .match-card.match-excellent {
@@ -1406,19 +1391,11 @@ export default {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .expiring-icon {
     font-size: 1.8em;
     flex-shrink: 0;
-}
-
-.expiring-text {
-    flex: 1;
-    min-width: 0;
 }
 
 .expiring-text strong {
@@ -1433,67 +1410,6 @@ export default {
     font-size: 0.9em;
     margin: 0;
     line-height: 1.4;
-    word-wrap: break-word;
-}
-
-/* ========== ACTION BUTTONS IN SIDEBAR (OPTION 1) ========== */
-.recipe-modal-actions-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
-    align-items: stretch;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
-.btn-sidebar {
-    width: 100%;
-    padding: 14px 16px;
-    border-radius: 12px;
-    text-align: center;
-    font-weight: 600;
-    font-size: 0.95em;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    text-decoration: none;
-    box-sizing: border-box;
-    margin: 0;
-}
-
-.btn-sidebar.btn-danger {
-    background: #e52d27;
-    color: white;
-}
-
-.btn-sidebar.btn-danger:hover {
-    background: #c9221c;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
-    color: white;
-}
-
-.btn-sidebar.btn-success {
-    background: #28a745;
-    color: white;
-}
-
-.btn-sidebar.btn-success:hover {
-    background: #218838;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
-}
-
-.youtube-icon {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
 }
 
 /* Right Side: Content */
@@ -1523,7 +1439,7 @@ export default {
 
 .recipe-scrollable-content {
     flex: 1;
-    padding: 25px 30px 30px 30px;
+    padding: 25px 30px 0 30px;
     overflow-y: auto;
     max-height: calc(100vh - 350px);
     min-height: 450px;
@@ -1627,6 +1543,70 @@ export default {
     margin-bottom: 0;
 }
 
+/* ========== UPDATED: Modal Actions - Centered Inside Scroll ========== */
+.recipe-modal-actions-centered {
+    margin-top: 30px;
+    margin-bottom: 20px;
+    padding-top: 25px;
+    border-top: 2px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-video-red {
+    background: #e52d27;
+    color: white;
+    padding: 14px 30px;
+    border-radius: 8px;
+    text-decoration: none;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 250px;
+}
+
+.youtube-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.btn-video-red:hover {
+    background: #c9221c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
+    color: white;
+}
+
+.btn-use-recipe-green {
+    background: #28a745;
+    color: white;
+    padding: 14px 30px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-width: 250px;
+}
+
+.btn-use-recipe-green:hover {
+    background: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
 /* Responsive for styled modal */
 @media (max-width: 900px) {
     .recipe-detail-layout-styled {
@@ -1642,8 +1622,18 @@ export default {
     }
     
     .recipe-scrollable-content {
-        max-height: calc(100vh - 400px);
+        max-height: calc(100vh - 500px);
         min-height: 300px;
+    }
+    
+    .recipe-modal-actions-centered {
+        padding: 20px 0 0 0;
+    }
+    
+    .btn-video-red,
+    .btn-use-recipe-green {
+        width: 100%;
+        min-width: auto;
     }
 }
 
