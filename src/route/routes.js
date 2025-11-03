@@ -47,6 +47,8 @@ supabase.auth.onAuthStateChange((_evt, session) => {
 // ---- Routes ----
 const routes = [
   { path: "/", redirect: "/Loading" },
+  { path: "/login", component: Login },
+  { path: "/ProfileForm", component: ProfileForm },
 
   // Guest-only pages
   { path: "/Loading", component: Loading, meta: { guestOnly: true, hideWhenAuthed: true } },

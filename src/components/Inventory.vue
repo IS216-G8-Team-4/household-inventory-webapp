@@ -14,21 +14,42 @@
     // UI states
     const sortBy = ref('alphabetical')
     const sortLabel = computed(() => sortBy.value === 'expiry' ? 'Expiring Soon' : 'Alphabetical (A–Z)')
-    const searchQuery = ref('') // Placeholder for upcoming feature
+    const searchQuery = ref('')
 
-    // Computed: sort logic
-    const sortedInventory = computed(() => {
+    // Filter 
+    const selectedCategories = ref([]) // Which categories are checked
+    const availableCategories = computed(() => {
+        // Extract unique categories from current inventory
+        const all = inventory.value.map(i => i.category).filter(Boolean)
+        return [...new Set(all)].sort()
+    })
+    
+    // Computed: Filter + Sort + Search combined
+    const filteredInventory = computed(() => {
+        let list = [...inventory.value]
+
+        // Apply category filter (if any selected)
+        if (searchQuery.value.trim() !== '') {
+            const q = searchQuery.value.trim().toLowerCase()
+            list = list.filter(item => item.name.toLowerCase().includes(q))
+        }
+
+        // Apply category filter
+        if (selectedCategories.value.length > 0) {
+            list = list.filter(item => selectedCategories.value.includes(item.category))
+        }
+
+        // Apply sorting
         if (sortBy.value === 'alphabetical') {
-            return [...inventory.value].sort((a, b) => a.name.localeCompare(b.name))
+            list.sort((a, b) => a.name.localeCompare(b.name))
         } else if (sortBy.value === 'expiry') {
-            // Sort by earliest batch expiry date
-            return [...inventory.value].sort((a, b) => {
-                const earliestA = Math.min(...a.batches.map(b => new Date(b.expiryDate)))
-                const earliestB = Math.min(...b.batches.map(b => new Date(b.expiryDate)))
-                return earliestA - earliestB
+            list.sort((a, b) => {
+            const earliestA = Math.min(...a.batches.map(b => new Date(b.expiryDate)))
+            const earliestB = Math.min(...b.batches.map(b => new Date(b.expiryDate)))
+            return earliestA - earliestB
             })
         }
-        return inventory.value
+    return list
     })
 
     // Change sorting method
@@ -192,7 +213,24 @@
                     Filter by Category
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="filterDropdown">
-                    <li><a class="dropdown-item disabled" href="#">Coming soon</a></li>
+                    <li v-for="cat in availableCategories" :key="cat" class="px-3 py-1">
+                    <div class="form-check">
+                        <input 
+                        class="form-check-input" 
+                        type="checkbox" 
+                        :value="cat" 
+                        v-model="selectedCategories" 
+                        :id="`filter-${cat}`"
+                        >
+                        <label class="form-check-label" :for="`filter-${cat}`">
+                        {{ cat }}
+                        </label>
+                    </div>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li class="px-3">
+                    <button class="btn btn-sm btn-outline-secondary w-100" @click="selectedCategories = []">Clear Filters</button>
+                    </li>
                 </ul>
             </div>
 
@@ -214,7 +252,7 @@
         </div>
 
         <!-- Inventory Cards -->
-        <div v-for="item in sortedInventory" :key="item.id" class="card mb-3 shadow-sm">
+        <div v-for="item in filteredInventory" :key="item.id" class="card mb-3 shadow-sm">
             <div class="card-body">
                 <h5 class="card-title">{{ item.name }}</h5>
                 <p class="mb-1"><strong>Category:</strong> {{ item.category }}</p>
