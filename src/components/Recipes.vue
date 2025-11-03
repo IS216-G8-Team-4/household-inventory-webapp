@@ -1,5 +1,6 @@
 <script>
 import { supabase } from '@/lib/supabase.js'
+import RecipeLoadingSkeleton from './RecipeLoadingSkeleton.vue';
 
 export default {
     data() {
@@ -39,6 +40,10 @@ export default {
             undoTimer: null,
             lastDeduction: null
         }
+    },
+
+    components:{
+        RecipeLoadingSkeleton
     },
     
     computed: {
@@ -804,6 +809,7 @@ export default {
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
+            <RecipeLoadingSkeleton v-if="loading" :skeleton-count="6" />
             <p class="mt-3">Finding delicious recipes...</p>
         </div>
 
