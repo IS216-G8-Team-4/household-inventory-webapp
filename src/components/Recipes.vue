@@ -53,17 +53,21 @@ export default {
         recipesWithMatch() {
             return this.recipes.map(recipe => {
                 const recipeIngredients = this.extractRecipeIngredients(recipe)
-                const matchedIngredients = recipeIngredients.filter(ing => 
-                    this.availableIngredients.some(avail => 
-                        avail.includes(ing.toLowerCase()) || ing.toLowerCase().includes(avail)
-                    )
-                )
+                const matchedIngredients = recipeIngredients.filter(ing => {
+                    const recipeWords = ing.toLowerCase().trim().split(/\s+/);
+                    return this.availableIngredients.some(avail => {
+                        const inventoryWords = avail.toLowerCase().trim().split(/\s+/);
+                        return recipeWords.every(word => inventoryWords.includes(word));
+                    });
+                })
                 
-                const expiringMatchedIngredients = matchedIngredients.filter(ing =>
-                    this.expiringIngredientNames.some(expiring =>
-                        expiring.includes(ing.toLowerCase()) || ing.toLowerCase().includes(expiring)
-                    )
-                )
+                const expiringMatchedIngredients = matchedIngredients.filter(ing => {
+                    const recipeWords = ing.toLowerCase().trim().split(/\s+/);
+                    return this.expiringIngredientNames.some(expiring => {
+                        const expiringWords = expiring.toLowerCase().trim().split(/\s+/);
+                        return recipeWords.every(word => expiringWords.includes(word));
+                    });
+                })
                 
                 const matchPercentage = recipeIngredients.length > 0 
                     ? Math.round((matchedIngredients.length / recipeIngredients.length) * 100)
@@ -91,7 +95,7 @@ export default {
             })
         },
         
-        // NEW: Sorted ingredients for modal display (available first, then missing)
+        // Sorted ingredients for modal display (shows available first then missing)
         sortedRecipeIngredients() {
             if (!this.selectedRecipe) return []
             
@@ -419,17 +423,27 @@ export default {
         },
         
         isIngredientAvailable(ingredientName) {
-            return this.availableIngredients.some(avail => 
-                avail.includes(ingredientName.toLowerCase()) || 
-                ingredientName.toLowerCase().includes(avail)
-            )
+            const recipeIngredient = ingredientName.toLowerCase().trim();
+            const recipeWords = recipeIngredient.split(/\s+/);
+            
+            return this.availableIngredients.some(inventoryItem => {
+                const invItem = inventoryItem.toLowerCase().trim();
+                const inventoryWords = invItem.split(/\s+/);
+                
+                // All exact words from recipe ingredient must appear in inventory item
+                return recipeWords.every(word => inventoryWords.includes(word));
+            });
         },
         
         isIngredientExpiring(ingredientName) {
-            return this.expiringIngredientNames.some(expiring =>
-                expiring.includes(ingredientName.toLowerCase()) ||
-                ingredientName.toLowerCase().includes(expiring)
-            )
+            const recipeIngredient = ingredientName.toLowerCase().trim();
+            const recipeWords = recipeIngredient.split(/\s+/);
+            
+            return this.expiringIngredientNames.some(expiring => {
+                const expiringWords = expiring.toLowerCase().trim().split(/\s+/);
+                // All words from recipe ingredient must appear in expiring item
+                return recipeWords.every(word => expiringWords.includes(word));
+            });
         },
         
         async prepareUseRecipe(recipe) {
@@ -442,10 +456,12 @@ export default {
                 const ingredientName = recipeIngredients[i]
                 const measure = this.getIngredientMeasure(recipe, i + 1)
                 
-                const inventoryItem = this.inventory.find(item => 
-                    item.name.toLowerCase().includes(ingredientName.toLowerCase()) ||
-                    ingredientName.toLowerCase().includes(item.name.toLowerCase())
-                )
+                // Use precise word-based matching
+                const recipeWords = ingredientName.toLowerCase().trim().split(/\s+/);
+                const inventoryItem = this.inventory.find(item => {
+                    const inventoryWords = item.name.toLowerCase().trim().split(/\s+/);
+                    return recipeWords.every(word => inventoryWords.includes(word));
+                });
                 
                 const quantityMatch = measure.match(/(\d+\.?\d*)/)
                 const quantity = quantityMatch ? parseFloat(quantityMatch[1]) : 1
@@ -551,7 +567,7 @@ export default {
                 this.undoTimer = setTimeout(() => {
                     this.showUndoNotification = false
                     this.lastDeduction = null
-                }, 5000)
+                }, 15000)
                 
             } catch (error) {
                 console.error('Error using recipe:', error)
@@ -854,13 +870,13 @@ export default {
             </div>
         </div>
 
-        <!-- ========== UPDATED RECIPE DETAIL MODAL (OPTION 1) ========== -->
+        <!-- RECIPE DETAIL MODAL -->
         <div v-if="selectedRecipe" class="recipe-modal" @click.self="closeRecipeModal">
             <div class="recipe-modal-content recipe-detail-modal-styled">
                 <button class="btn-close-modal" @click="closeRecipeModal">&times;</button>
                 
                 <div class="recipe-detail-layout-styled">
-                    <!-- Left Side: Recipe Image with Info Cards & BUTTONS -->
+                    <!-- Left Side: Recipe Image with Info Cards & buttons -->
                     <div class="recipe-detail-left">
                         <div class="recipe-image-wrapper">
                             <img 
@@ -885,7 +901,7 @@ export default {
                             </div>
                         </div>
                         
-                        <!-- ACTION BUTTONS (OPTION 1) -->
+                        <!-- ACTION BUTTONS -->
                         <div class="recipe-modal-actions-sidebar">
                             <a v-if="selectedRecipe.strYoutube" 
                                :href="selectedRecipe.strYoutube" 
@@ -894,7 +910,7 @@ export default {
                                 <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                                 </svg>
-                                Watch Video Tutorial
+                                Watch Video
                             </a>
                             <button class="btn btn-success btn-sidebar" @click="prepareUseRecipe(selectedRecipe)">
                                 Use This Recipe
@@ -926,8 +942,13 @@ export default {
                                     }"
                                 >
                                     <span class="ingredient-check-icon">
-                                        {{ ingredient.isExpiring ? '✓ 🔥' : 
-                                           ingredient.isAvailable ? '✓' : '✗' }}
+                                        <span v-if="ingredient.isExpiring" class="icon-container">
+                                            <span class="check-icon">✓</span>
+                                            <span class="fire-icon">🔥</span>
+                                        </span>
+                                        <span v-else>
+                                            {{ ingredient.isAvailable ? '✓' : '✗' }}
+                                        </span>
                                     </span>
                                     <span class="ingredient-text-styled">
                                         {{ ingredient.measure }} {{ ingredient.name }}
@@ -952,102 +973,103 @@ export default {
                 
                 <div v-if="recipeToUse" class="recipe-confirmation-layout-new">
                     <!-- Header Section -->
-                    <div class="confirmation-header">
-                        <div class="confirmation-title-section">
-                            <h2 class="confirmation-recipe-name">{{ recipeToUse.strMeal }}</h2>
-                            <div class="confirmation-badges">
+                    <div class="confirmation-header-new">
+                        <div class="confirmation-image-left">
+                            <img :src="recipeToUse.strMealThumb" :alt="recipeToUse.strMeal" class="confirmation-recipe-image-redesign">
+                        </div>
+                        <div class="confirmation-info-right">
+                            <div class="confirmation-badges-top">
                                 <span class="badge bg-secondary">{{ recipeToUse.strCategory }}</span>
                                 <span class="badge bg-info">{{ recipeToUse.strArea }}</span>
                             </div>
-                        </div>
-                        <div class="confirmation-image-wrapper">
-                            <img :src="recipeToUse.strMealThumb" :alt="recipeToUse.strMeal" class="confirmation-recipe-image-small">
-                        </div>
-                    </div>
-                    
-                    <!-- Match Info Card -->
-                    <div class="match-info-card">
-                        <div class="match-percentage-new" :class="getMatchClass(recipeToUse.matchPercentage)">
-                            <div class="match-circle">
-                                <span class="match-number">{{ recipeToUse.matchPercentage }}%</span>
-                            </div>
-                            <span class="match-label">Ingredient Match</span>
-                        </div>
-                        
-                        <div v-if="ingredientsToDeduct.filter(i => i.isExpiring).length > 0" 
-                             class="expiring-alert-new">
-                            <div class="expiring-icon-wrapper">
-                                <span class="expiring-icon-large">⏰</span>
-                            </div>
-                            <div class="expiring-content">
-                                <strong>Expiring Soon</strong>
-                                <p class="mb-0">
-                                    {{ ingredientsToDeduct.filter(i => i.isExpiring).map(i => i.name).join(', ') }}
-                                </p>
+                            <h2 class="confirmation-recipe-name-new">{{ recipeToUse.strMeal }}</h2>
+                            <div class="confirmation-stats">
+                                <div class="stat-item">
+                                    <div class="stat-value" :class="getMatchClass(recipeToUse.matchPercentage)">
+                                        {{ recipeToUse.matchPercentage }}%
+                                    </div>
+                                    <div class="stat-label">Match</div>
+                                </div>
+                                <div class="stat-divider"></div>
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ ingredientsToDeduct.filter(i => i.available).length }}/{{ ingredientsToDeduct.length }}</div>
+                                    <div class="stat-label">Available</div>
+                                </div>
+                                <template v-if="ingredientsToDeduct.filter(i => i.isExpiring).length > 0">
+                                    <div class="stat-divider"></div>
+                                    <div class="stat-item">
+                                        <div class="stat-value expiring-stat">{{ ingredientsToDeduct.filter(i => i.isExpiring).length }}</div>
+                                        <div class="stat-label">Expiring</div>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Ingredients List -->
-                    <div class="ingredients-section-new">
-                        <h3 class="section-title-new">Select Ingredients to Deduct</h3>
-                        <p class="section-subtitle">Review and adjust quantities before confirming</p>
+                    <div class="ingredients-section-redesign">
+                        <h3 class="section-title-redesign">
+                            <span>Select Ingredients to Use</span>
+                            <span class="ingredients-count">{{ ingredientsToDeduct.filter(i => i.checked).length }} selected</span>
+                        </h3>
                         
-                        <div class="ingredients-list-new">
+                        <div class="ingredients-list-redesign">
                             <div 
                                 v-for="(ingredient, index) in ingredientsToDeduct" 
                                 :key="index"
-                                class="ingredient-card"
+                                class="ingredient-card-redesign"
                                 :class="{
-                                    'ingredient-expiring-card': ingredient.isExpiring,
-                                    'ingredient-available-card': ingredient.available && !ingredient.isExpiring,
-                                    'ingredient-missing-card': !ingredient.available,
-                                    'ingredient-unchecked-card': !ingredient.checked
+                                    'is-expiring': ingredient.isExpiring,
+                                    'is-available': ingredient.available && !ingredient.isExpiring,
+                                    'is-missing': !ingredient.available,
+                                    'is-unchecked': !ingredient.checked
                                 }"
                             >
-                                <div class="ingredient-card-content">
-                                    <!-- Left: Checkbox and Status -->
-                                    <div class="ingredient-left">
+                                <div class="ingredient-card-main">
+                                    <!-- Checkbox -->
+                                    <div class="ingredient-checkbox-wrapper">
                                         <input 
                                             type="checkbox" 
                                             v-model="ingredient.checked"
                                             :disabled="!ingredient.available"
-                                            class="modern-checkbox"
+                                            :id="'ingredient-' + index"
+                                            class="custom-checkbox"
                                         >
-                                        <div class="ingredient-status-badge" 
-                                             :class="{
-                                                 'status-expiring': ingredient.isExpiring,
-                                                 'status-available': ingredient.available && !ingredient.isExpiring,
-                                                 'status-missing': !ingredient.available
-                                             }">
-                                            <span class="status-icon">
-                                                {{ ingredient.isExpiring ? '⏰' : 
-                                                   ingredient.available ? '✓' : '✗' }}
-                                            </span>
-                                        </div>
+                                        <label :for="'ingredient-' + index" class="checkbox-label"></label>
                                     </div>
                                     
-                                    <!-- Center: Ingredient Details -->
-                                    <div class="ingredient-center">
-                                        <div class="ingredient-name">{{ ingredient.name }}</div>
-                                        <div class="ingredient-measure">{{ ingredient.measure }}</div>
+                                    <!-- Status Indicator -->
+                                    <div class="ingredient-status-indicator">
+                                        <span v-if="ingredient.isExpiring" class="status-badge badge-expiring">
+                                            <span class="icon">⏰</span>
+                                        </span>
+                                        <span v-else-if="ingredient.available" class="status-badge badge-available">
+                                            <span class="icon">✓</span>
+                                        </span>
+                                        <span v-else class="status-badge badge-missing">
+                                            <span class="icon">✗</span>
+                                        </span>
                                     </div>
                                     
-                                    <!-- Right: Quantity Edit -->
-                                    <div class="ingredient-right" v-if="ingredient.available">
-                                        <div class="quantity-editor">
-                                            <input 
-                                                type="number" 
-                                                v-model.number="ingredient.editableQuantity"
-                                                :disabled="!ingredient.checked"
-                                                class="quantity-input-new"
-                                                step="0.01"
-                                                min="0"
-                                            >
-                                            <span class="quantity-unit">{{ ingredient.inventoryUnit }}</span>
-                                        </div>
+                                    <!-- Ingredient Info -->
+                                    <div class="ingredient-info-wrapper">
+                                        <div class="ingredient-name-redesign">{{ ingredient.name }}</div>
+                                        <div class="ingredient-measure-redesign">{{ ingredient.measure }}</div>
+                                    </div>
+                                    
+                                    <!-- Quantity Editor -->
+                                    <div class="ingredient-quantity-wrapper" v-if="ingredient.available">
+                                        <input 
+                                            type="number" 
+                                            v-model.number="ingredient.editableQuantity"
+                                            :disabled="!ingredient.checked"
+                                            class="quantity-input-redesign"
+                                            step="0.01"
+                                            min="0"
+                                        >
+                                        <span class="quantity-unit-redesign">{{ ingredient.inventoryUnit }}</span>
                                         <span v-if="ingredient.unitMatch === 'mismatch'" 
-                                              class="warning-badge" 
+                                              class="unit-warning" 
                                               title="Unit mismatch - please verify">
                                             ⚠️
                                         </span>
@@ -1058,25 +1080,26 @@ export default {
                     </div>
                     
                     <!-- Action Buttons -->
-                    <div class="modal-actions-new">
+                    <div class="modal-actions-redesign">
                         <button 
-                            class="btn-modern btn-cancel" 
+                            class="btn-redesign btn-cancel-redesign" 
                             @click="cancelUseRecipe"
                             :disabled="usingRecipe"
                         >
-                            <span>Cancel</span>
+                            Cancel
                         </button>
                         <button 
-                            class="btn-modern btn-confirm" 
+                            class="btn-redesign btn-confirm-redesign" 
                             @click="confirmUseRecipe"
-                            :disabled="usingRecipe"
+                            :disabled="usingRecipe || ingredientsToDeduct.filter(i => i.checked).length === 0"
                         >
                             <span v-if="usingRecipe">
                                 <span class="spinner-border spinner-border-sm me-2"></span>
                                 Processing...
                             </span>
                             <span v-else>
-                                ✓ Confirm & Use Recipe ({{ ingredientsToDeduct.filter(i => i.checked).length }} items)
+                                <span class="btn-icon">✓</span>
+                                Use Recipe
                             </span>
                         </button>
                     </div>
@@ -1197,10 +1220,10 @@ export default {
     font-weight: 600;
 }
 
-.match-excellent { background: #28a745; }
-.match-good { background: #17a2b8; }
-.match-fair { background: #ffc107; }
-.match-low { background: #dc3545; }
+.match-badge.match-excellent { background: #28a745; }
+.match-badge.match-good { background: #17a2b8; }
+.match-badge.match-fair { background: #ffc107; }
+.match-badge.match-low { background: #dc3545; }
 
 .recipe-content {
     padding: 20px;
@@ -1301,7 +1324,7 @@ export default {
     transform: scale(1.1);
 }
 
-/* ========== STYLED RECIPE DETAIL MODAL (OPTION 1) ========== */
+/* Recipe Modal Styles */
 
 .recipe-detail-modal-styled {
     max-width: 1000px;
@@ -1436,7 +1459,7 @@ export default {
     word-wrap: break-word;
 }
 
-/* ========== ACTION BUTTONS IN SIDEBAR (OPTION 1) ========== */
+/* Left Sidebar Action Buttons (watch + use) */
 .recipe-modal-actions-sidebar {
     display: flex;
     flex-direction: column;
@@ -1594,8 +1617,25 @@ export default {
     font-size: 1.2em;
     font-weight: bold;
     flex-shrink: 0;
-    width: 30px;
+    width: 40px;
     text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-container {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.check-icon {
+    font-size: 1em;
+}
+
+.fire-icon {
+    font-size: 0.95em;
 }
 
 .ingredient-available-styled .ingredient-check-icon {
@@ -1647,394 +1687,466 @@ export default {
     }
 }
 
-/* ========== CONFIRMATION MODAL STYLES ========== */
+/* ========== REDESIGNED CONFIRMATION MODAL STYLES ========== */
 
 .use-recipe-modal-new {
-    max-width: 900px;
-    border-radius: 20px;
+    max-width: 850px;
+    max-height: 90vh;
+    border-radius: 16px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .recipe-confirmation-layout-new {
-    padding: 40px;
-}
-
-.confirmation-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 30px;
-    margin-bottom: 30px;
-    padding-bottom: 25px;
-    border-bottom: 3px solid #f0f0f0;
-}
-
-.confirmation-title-section {
-    flex: 1;
-}
-
-.confirmation-recipe-name {
-    font-size: 2em;
-    font-weight: 700;
-    color: #2c3e50;
-    margin: 0 0 15px 0;
-    line-height: 1.2;
-}
-
-.confirmation-badges {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.confirmation-image-wrapper {
-    flex-shrink: 0;
-}
-
-.confirmation-recipe-image-small {
-    width: 150px;
-    height: 150px;
-    border-radius: 15px;
-    object-fit: cover;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.match-info-card {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 25px;
-    margin-bottom: 30px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 25px;
-    border-radius: 15px;
-    color: white;
-}
-
-.match-percentage-new {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.match-circle {
-    width: 90px;
-    height: 90px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-}
-
-.match-number {
-    font-size: 1.8em;
-    font-weight: 700;
-}
-
-.match-label {
-    font-size: 1.1em;
-    font-weight: 600;
-}
-
-.expiring-alert-new {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    background: rgba(255, 255, 255, 0.15);
-    padding: 15px;
-    border-radius: 10px;
-    backdrop-filter: blur(10px);
-}
-
-.expiring-icon-wrapper {
-    flex-shrink: 0;
-}
-
-.expiring-icon-large {
-    font-size: 2.5em;
-    display: block;
-}
-
-.expiring-content strong {
-    display: block;
-    font-size: 1.1em;
-    margin-bottom: 5px;
-}
-
-.expiring-content p {
-    font-size: 0.95em;
-    opacity: 0.95;
-}
-
-.ingredients-section-new {
-    margin-bottom: 30px;
-}
-
-.section-title-new {
-    font-size: 1.5em;
-    font-weight: 700;
-    color: #2c3e50;
-    margin-bottom: 8px;
-}
-
-.section-subtitle {
-    color: #7f8c8d;
-    font-size: 0.95em;
-    margin-bottom: 20px;
-}
-
-.ingredients-list-new {
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    max-height: 400px;
-    overflow-y: auto;
-    padding-right: 10px;
+    max-height: 90vh;
+    min-height: auto;
+    overflow: hidden;
 }
 
-.ingredients-list-new::-webkit-scrollbar {
-    width: 8px;
+/* Header Section - Redesigned */
+.confirmation-header-new {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 30px;
+    padding: 30px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-bottom: 1px solid #e9ecef;
+    flex-shrink: 0;
 }
 
-.ingredients-list-new::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
+/* Prevent any match-badge styles from bleeding into stats */
+.confirmation-header-new .stat-value {
+    border-radius: 0;
 }
 
-.ingredients-list-new::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 10px;
+.confirmation-image-left {
+    position: relative;
 }
 
-.ingredients-list-new::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-}
-
-.ingredient-card {
-    background: white;
+.confirmation-recipe-image-redesign {
+    width: 100%;
+    height: 200px;
     border-radius: 12px;
-    padding: 15px 20px;
-    transition: all 0.3s;
-    border: 2px solid transparent;
-}
-
-.ingredient-expiring-card {
-    border-color: #f39c12;
-    background: linear-gradient(135deg, #fff9e6 0%, #fff 100%);
-}
-
-.ingredient-available-card {
-    border-color: #27ae60;
-    background: linear-gradient(135deg, #e8f8f5 0%, #fff 100%);
-}
-
-.ingredient-missing-card {
-    border-color: #e74c3c;
-    background: linear-gradient(135deg, #fce8e6 0%, #fff 100%);
-    opacity: 0.7;
-}
-
-.ingredient-unchecked-card {
-    opacity: 0.5;
-}
-
-.ingredient-card-content {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.ingredient-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.modern-checkbox {
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    accent-color: #667eea;
-}
-
-.modern-checkbox:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-}
-
-.ingredient-status-badge {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2em;
-    font-weight: bold;
-}
-
-.status-expiring {
-    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
-    color: white;
-}
-
-.status-available {
-    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
-    color: white;
-}
-
-.status-missing {
-    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-    color: white;
-}
-
-.ingredient-center {
-    flex: 1;
-}
-
-.ingredient-name {
-    font-size: 1.1em;
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 4px;
-}
-
-.ingredient-measure {
-    font-size: 0.9em;
-    color: #7f8c8d;
-}
-
-.ingredient-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.quantity-editor {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #f8f9fa;
-    padding: 8px 12px;
-    border-radius: 8px;
-}
-
-.quantity-input-new {
-    width: 70px;
-    padding: 6px 10px;
-    border: 2px solid #e9ecef;
-    border-radius: 6px;
-    text-align: center;
-    font-size: 1em;
-    font-weight: 600;
-    color: #2c3e50;
-    transition: all 0.3s;
-}
-
-.quantity-input-new:focus {
-    border-color: #667eea;
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.quantity-input-new:disabled {
-    background: #e9ecef;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.quantity-unit {
-    font-size: 0.9em;
-    font-weight: 600;
-    color: #7f8c8d;
-}
-
-.warning-badge {
-    font-size: 1.3em;
-}
-
-.modal-actions-new {
-    display: flex;
-    gap: 15px;
-    padding-top: 25px;
-    border-top: 3px solid #f0f0f0;
-}
-
-.btn-modern {
-    flex: 1;
-    padding: 16px 30px;
-    font-size: 1.1em;
-    font-weight: 600;
-    border-radius: 12px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.btn-modern:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.btn-cancel {
-    background: #ecf0f1;
-    color: #7f8c8d;
-}
-
-.btn-cancel:hover:not(:disabled) {
-    background: #bdc3c7;
-    transform: translateY(-2px);
+    object-fit: cover;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.btn-confirm {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.confirmation-info-right {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+}
+
+.confirmation-badges-top {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.confirmation-recipe-name-new {
+    font-size: 1.75em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.confirmation-stats {
+    display: flex;
+    align-items: stretch;
+    gap: 20px;
+    margin-top: 16px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 75px;
+    flex: 0 0 auto;
+}
+
+.stat-value {
+    font-size: 2em;
+    font-weight: 700;
+    color: #2c3e50;
+    line-height: 1.2;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: transparent !important;
+    padding: 0;
+    border: none;
+}
+
+.stat-label {
+    font-size: 0.65em;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-align: center;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stat-divider {
+    width: 1px;
+    height: 100%;
+    background: #dee2e6;
+    align-self: stretch;
+    margin: 0;
+}
+
+.stat-value.match-excellent { 
+    color: #28a745;
+}
+.stat-value.match-good { 
+    color: #17a2b8;
+}
+.stat-value.match-fair { 
+    color: #ffc107;
+}
+.stat-value.match-low { 
+    color: #dc3545;
+}
+.stat-value.expiring-stat { 
+    color: #ff6b6b;
+}
+
+/* Ingredients Section - Redesigned */
+.ingredients-section-redesign {
+    padding: 30px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.ingredients-section-redesign::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ingredients-section-redesign::-webkit-scrollbar-track {
+    background: #f1f3f5;
+    border-radius: 10px;
+}
+
+.ingredients-section-redesign::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 10px;
+}
+
+.ingredients-section-redesign::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+.section-title-redesign {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.3em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 20px 0;
+}
+
+.ingredients-count {
+    font-size: 0.7em;
+    font-weight: 600;
+    color: #6c757d;
+    background: #f8f9fa;
+    padding: 4px 12px;
+    border-radius: 12px;
+}
+
+.ingredients-list-redesign {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-right: 8px;
+}
+
+/* Ingredient Card - Redesigned */
+.ingredient-card-redesign {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+.ingredient-card-redesign.is-expiring {
+    border-color: #ffc107;
+    background: #fffbf0;
+}
+
+.ingredient-card-redesign.is-available {
+    border-color: #d4edda;
+}
+
+.ingredient-card-redesign.is-missing {
+    border-color: #f8d7da;
+    background: #fef5f6;
+    opacity: 0.7;
+}
+
+.ingredient-card-redesign.is-unchecked {
+    opacity: 0.6;
+}
+
+.ingredient-card-redesign:hover:not(.is-missing) {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.ingredient-card-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+/* Custom Checkbox */
+.ingredient-checkbox-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.custom-checkbox {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkbox-label {
+    display: block;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #cbd5e0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.custom-checkbox:checked + .checkbox-label {
+    background: #4CAF50;
+    border-color: #4CAF50;
+}
+
+.custom-checkbox:checked + .checkbox-label::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.custom-checkbox:disabled + .checkbox-label {
+    background: #e9ecef;
+    border-color: #dee2e6;
+    cursor: not-allowed;
+}
+
+/* Status Indicator */
+.ingredient-status-indicator {
+    flex-shrink: 0;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 1em;
+}
+
+.badge-expiring {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-available {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-missing {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Ingredient Info */
+.ingredient-info-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.ingredient-name-redesign {
+    font-size: 1em;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 2px;
+}
+
+.ingredient-measure-redesign {
+    font-size: 0.875em;
+    color: #6c757d;
+}
+
+/* Quantity Editor */
+.ingredient-quantity-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.quantity-input-redesign {
+    width: 70px;
+    padding: 8px 10px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #2c3e50;
+    transition: all 0.2s;
+}
+
+.quantity-input-redesign:focus {
+    border-color: #4CAF50;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.quantity-input-redesign:disabled {
+    background: #f8f9fa;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.quantity-unit-redesign {
+    font-size: 0.875em;
+    font-weight: 600;
+    color: #6c757d;
+    min-width: 30px;
+}
+
+.unit-warning {
+    font-size: 1.2em;
+    cursor: help;
+}
+
+/* Action Buttons*/
+.modal-actions-redesign {
+    display: flex;
+    gap: 12px;
+    padding: 20px 30px;
+    border-top: 1px solid #e9ecef;
+    background: #f8f9fa;
+    flex-shrink: 0;
+}
+
+.btn-redesign {
+    flex: 1;
+    padding: 14px 24px;
+    font-size: 1.05em;
+    font-weight: 600;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-redesign:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-cancel-redesign {
+    background: white;
+    color: #6c757d;
+    border: 2px solid #dee2e6;
+}
+
+.btn-cancel-redesign:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.btn-confirm-redesign {
+    background: #4CAF50;
     color: white;
 }
 
-.btn-confirm:hover:not(:disabled) {
-    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+.btn-confirm-redesign:hover:not(:disabled) {
+    background: #45a049;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
 }
 
+.btn-icon {
+    font-size: 1.1em;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
-    .recipe-confirmation-layout-new {
-        padding: 25px;
+    .use-recipe-modal-new {
+        max-height: 95vh;
     }
     
-    .confirmation-header {
-        flex-direction: column-reverse;
-        align-items: center;
-        text-align: center;
-    }
-    
-    .confirmation-recipe-name {
-        font-size: 1.6em;
-    }
-    
-    .match-info-card {
+    .confirmation-header-new {
         grid-template-columns: 1fr;
+        text-align: center;
+        padding: 20px;
     }
     
-    .modal-actions-new {
-        flex-direction: column;
+    .confirmation-recipe-image-redesign {
+        height: 150px;
+        margin: 0 auto;
+        max-width: 200px;
     }
     
-    .ingredient-card-content {
+    .confirmation-stats {
+        justify-content: center;
+    }
+    
+    .ingredients-section-redesign {
+        padding: 20px;
+    }
+    
+    .ingredient-card-main {
         flex-wrap: wrap;
     }
     
-    .ingredient-right {
+    .ingredient-quantity-wrapper {
         width: 100%;
         justify-content: flex-start;
-        margin-top: 10px;
+        margin-top: 8px;
+    }
+    
+    .modal-actions-redesign {
+        flex-direction: column;
+        padding: 15px 20px;
     }
 }
 
