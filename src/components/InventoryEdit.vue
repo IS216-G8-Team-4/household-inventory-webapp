@@ -25,7 +25,15 @@
     const routingAction = ref(null)
     let successTimer = null
 
-    // **NOTIFICATION METHODS**
+    // **UNDO NOTIFICATION DATA **const showUndoNotification = ref(false)
+    const showUndoNotification = ref(false)
+    let deleteTimer = null // Timer for final commit (5 seconds)
+    let countdownInterval = null // Interval for the visual countdown
+    const countdown = ref(5) // Reactive countdown value (seconds)
+    const deletedBatchData = ref(null) // Stores data needed for undo
+    const deletedIngredientId = ref(null) // Stores ingredientId if ingredient was also deleted
+
+    // **NOTIFICATION METHODS (showSuccessMessage & dismissSuccessNotification)**
     function showSuccessMessage(message, callback = null) {
         successMessage.value = message
         showSuccessNotification.value = true
@@ -160,12 +168,25 @@
         }
     }
 
-    async function deleteBatch() {
-        try {
-            const confirmDelete = confirm(`Are you sure you want to delete this batch of ${name.value} (Expiry: ${expiryDate.value})?`)
-            if (!confirmDelete) return
+    // **Function to start the reversible delete process**
+    async function startBatchDeletionTimer() {
+        // 1. Clear any existing timer and state
+        if (deleteTimer) clearTimeout(deleteTimer)
+        if (countdownInterval) clearInterval(countdownInterval)
+        showUndoNotification.value = false // Ensure it's hidden before starting
 
-            // Delete batch
+        // 2. Capture data before deleting
+        deletedBatchData.value = {
+            id: batchId,
+            quantity: quantity.value,
+            expiry_date: expiryDate.value,
+            ingredient_id: ingredientId,
+            isLastBatch: false 
+        }
+        deletedIngredientId.value = null; 
+
+        try {
+            // --- 3a. Delete batch ---
             const { error: deleteError } = await supabase
                 .from('ingredient_batches')
                 .delete()
@@ -173,30 +194,113 @@
 
             if (deleteError) throw deleteError
 
-            // Check if the ingredient still has any batches
+            // --- 3b. Check if ingredient needs to be deleted ---
             const { data: remainingBatches, error: batchCheckError } = await supabase
                 .from('ingredient_batches')
                 .select('*')
                 .eq('ingredient_id', ingredientId)
-
+                
             if (batchCheckError) throw batchCheckError
-
-            // If no batches left, delete the ingredient
+            
             if (!remainingBatches || remainingBatches.length === 0) {
+                // This was the last batch, so we temporarily delete the ingredient
+                deletedBatchData.value.isLastBatch = true
+                
                 const { error: ingredientDeleteError } = await supabase
                     .from('ingredients')
                     .delete()
                     .eq('id', ingredientId)
-
+                    .select('id')
+                
                 if (ingredientDeleteError) throw ingredientDeleteError
             }
 
-            alert('Batch deleted successfully!')
-            router.push('/Inventory')
+            // 4. Show undo toast and set timers
+            showUndoNotification.value = true
+            countdown.value = 5 // Reset countdown
+
+            // Start the visual countdown
+            countdownInterval = setInterval(() => {
+                countdown.value--
+                if (countdown.value <= 0) {
+                    clearInterval(countdownInterval)
+                }
+            }, 1000)
+
+            // Final commit (Redirection) after 5 seconds
+            deleteTimer = setTimeout(() => {
+                showUndoNotification.value = false
+                router.push('/Inventory') 
+            }, 5000)
+
         } catch (error) {
-            console.error('Error deleting batch:', error)
-            alert('Failed to delete batch. See console for details.')
+            console.error('Error initiating batch deletion:', error)
+            alert('Failed to delete batch for undo. See console.')
+            return
         }
+    }
+    
+    // Function to undo the deletion**
+    async function undoBatchDelete() {
+        // 1. Stop the commit timer and countdown
+        if (deleteTimer) clearTimeout(deleteTimer)
+        if (countdownInterval) clearInterval(countdownInterval)
+        deleteTimer = null
+        countdownInterval = null
+
+        // 2. Hide the toast
+        showUndoNotification.value = false
+
+        // 3. Re-insert the deleted data
+        const batchToRestore = deletedBatchData.value;
+
+        if (batchToRestore) {
+            try {
+                // --- 3a. If ingredient was deleted, restore it first ---
+                if (batchToRestore.isLastBatch) {
+                    // Re-inserting the ingredient
+                    const { error: ingredientInsertError } = await supabase
+                        .from('ingredients')
+                        .insert([{ 
+                            id: batchToRestore.ingredient_id, 
+                            household_id: householdId.value,
+                            name: name.value,
+                            category: category.value,
+                            unit: unit.value
+                        }])
+                    if (ingredientInsertError) throw ingredientInsertError
+                }
+
+                // --- 3b. Re-insert the batch ---
+                const { error: batchInsertError } = await supabase
+                    .from('ingredient_batches')
+                    .insert([{ 
+                        id: batchToRestore.id, 
+                        ingredient_id: batchToRestore.ingredient_id, 
+                        quantity: batchToRestore.quantity, 
+                        expiry_date: batchToRestore.expiry_date
+                    }])
+                if (batchInsertError) throw batchInsertError
+                
+                // 4. Reset state and re-fetch page data
+                deletedBatchData.value = null
+                deletedIngredientId.value = null
+                
+                await fetchIngredientAndBatch() 
+
+                // Show success message for undo
+                showSuccessMessage(`Deletion undone. '${name.value}' batch restored!`)
+
+            } catch (error) {
+                console.error('Error undoing batch deletion:', error)
+                alert('Failed to undo deletion. Please check the inventory manually.')
+            }
+        }
+    }
+
+    // **deleteBatch function now calls the new reversible process**
+    async function deleteBatch() {
+        await startBatchDeletionTimer()
     }
 </script>
 
@@ -229,6 +333,26 @@
                         </svg>
                     </button>
                 </div>
+            </div>
+        </div>
+    </transition>
+
+    <transition name="slide-up">
+        <div 
+            v-if="showUndoNotification" 
+            class="undo-notification-bottom" 
+            role="alert" 
+            aria-live="assertive" 
+            aria-atomic="true"
+        >
+            <div class="undo-notification-card">
+                <p class="undo-message-text">Batch deleted. You can undo in <span class="undo-countdown-time">{{ countdown }}s</span></p> 
+                <button 
+                    class="btn btn-sm undo-btn" 
+                    @click="undoBatchDelete"
+                >
+                    UNDO
+                </button>
             </div>
         </div>
     </transition>
@@ -356,5 +480,72 @@
     .slide-down-leave-to {
         opacity: 0;
         transform: translateY(-100%) translateX(-50%);
+    }
+
+    /* ===== UNDO NOTIFICATION (BOTTOM CENTER) STYLES ===== */
+    .undo-notification-bottom {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2002; 
+        max-width: 450px;
+        width: calc(100% - 40px);
+    }
+
+    .undo-notification-card {
+        background: #333; /* Dark background */
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        padding: 10px 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .undo-message-text {
+        margin: 0;
+        font-size: 0.95em;
+        font-weight: 400;
+        flex-grow: 1; 
+    }
+
+    .undo-countdown-time {
+        font-weight: bold;
+        color: #FFC107; /* Amber/Yellow for high visibility */
+        margin-left: 5px;
+    }
+
+    .undo-btn {
+        flex-shrink: 0;
+        /* Using !important to override potential Bootstrap background/color for contrast */
+        background: white !important; 
+        color: #333 !important;
+        font-weight: bold;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+
+    .undo-btn:hover {
+        background: #f0f0f0 !important;
+    }
+
+    /* ===== TRANSITION STYLES (slide-up) - Ensures toast animates from bottom ===== */
+    .slide-up-enter-active,
+    .slide-up-leave-active {
+        transition: all 0.5s cubic-bezier(0.25, 0.8, 0.5, 1);
+    }
+
+    .slide-up-enter-from,
+    .slide-up-leave-to {
+        opacity: 0;
+        transform: translateY(100%) translateX(-50%);
     }
 </style>
