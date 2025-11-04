@@ -504,7 +504,7 @@ const requestDonation = async (donationId) => {
               </div>
 
               <div class="mb-3">
-                <label class="form-label">Unit</label>
+                <label class="form-label">Unit (For Food)</label>
                 <select v-model="form.unit" class="form-select" required>
                   <option disabled value="">Select unit</option>
                   <optgroup label="Weight">
