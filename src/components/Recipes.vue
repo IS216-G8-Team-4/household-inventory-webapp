@@ -1,5 +1,6 @@
 <script>
 import { supabase } from '@/lib/supabase.js'
+import RecipeLoadingSkeleton from './RecipeLoadingSkeleton.vue';
 
 export default {
     data() {
@@ -39,6 +40,10 @@ export default {
             undoTimer: null,
             lastDeduction: null
         }
+    },
+
+    components:{
+        RecipeLoadingSkeleton
     },
     
     computed: {
@@ -564,7 +569,10 @@ export default {
                 this.showUndoNotification = true
                 
                 if (this.undoTimer) clearTimeout(this.undoTimer)
-                this.undoTimer = setTimeout(() => {
+                this.undoTimer = setTimeout(async () => {
+                    // After 15 seconds, log the consumption to the database
+                    await this.logConsumption()
+                    
                     this.showUndoNotification = false
                     this.lastDeduction = null
                 }, 15000)
@@ -585,6 +593,7 @@ export default {
                 
                 let remainingQuantity = quantityNeeded
                 const batchUpdates = []
+                const batchesToDelete = []
                 
                 for (const batch of sortedBatches) {
                     if (remainingQuantity <= 0) break
@@ -595,33 +604,67 @@ export default {
                         const deductAmount = Math.min(currentQuantity, remainingQuantity)
                         const newQuantity = currentQuantity - deductAmount
                         
-                        const { error } = await supabase
-                            .from('ingredient_batches')
-                            .update({ 
-                                quantity: newQuantity,
-                                status: newQuantity <= 0 ? 'depleted' : 'active'
-                            })
-                            .eq('id', batch.id)
-                        
-                        if (error) throw error
+                        if (newQuantity <= 0) {
+                            // Delete batch if quantity reaches 0
+                            const { error } = await supabase
+                                .from('ingredient_batches')
+                                .delete()
+                                .eq('id', batch.id)
+                            
+                            if (error) throw error
+                            
+                            batchesToDelete.push(batch.id)
+                        } else {
+                            // Update batch with new quantity
+                            const { error } = await supabase
+                                .from('ingredient_batches')
+                                .update({ 
+                                    quantity: newQuantity,
+                                    status: 'active'
+                                })
+                                .eq('id', batch.id)
+                            
+                            if (error) throw error
+                        }
                         
                         batchUpdates.push({
                             batchId: batch.id,
                             previousQuantity: currentQuantity,
                             deductedAmount: deductAmount,
                             newQuantity: newQuantity,
-                            previousStatus: batch.status || 'active'
+                            previousStatus: batch.status || 'active',
+                            expiryDate: batch.expiry_date,
+                            wasDeleted: newQuantity <= 0
                         })
                         
                         remainingQuantity -= deductAmount
                     }
                 }
                 
+                // Check if ingredient has any remaining batches
+                const { data: remainingBatches, error: checkError } = await supabase
+                    .from('ingredient_batches')
+                    .select('id')
+                    .eq('ingredient_id', inventoryItem.id)
+                
+                if (checkError) throw checkError
+                
+                // If no batches left, delete the ingredient
+                if (!remainingBatches || remainingBatches.length === 0) {
+                    const { error: deleteError } = await supabase
+                        .from('ingredients')
+                        .delete()
+                        .eq('id', inventoryItem.id)
+                    
+                    if (deleteError) throw deleteError
+                }
+                
                 return {
                     ingredientId: inventoryItem.id,
                     ingredientName: inventoryItem.name,
                     totalDeducted: quantityNeeded - remainingQuantity,
-                    batchUpdates: batchUpdates
+                    batchUpdates: batchUpdates,
+                    ingredientDeleted: !remainingBatches || remainingBatches.length === 0
                 }
                 
             } catch (error) {
@@ -635,16 +678,51 @@ export default {
             
             try {
                 for (const deduction of this.lastDeduction.deductions) {
+                    // If the ingredient was deleted, recreate it first
+                    if (deduction.ingredientDeleted) {
+                        // Find the ingredient details from inventory
+                        const ingredientInfo = this.inventory.find(i => i.id === deduction.ingredientId)
+                        if (ingredientInfo) {
+                            const { error: recreateError } = await supabase
+                                .from('ingredients')
+                                .insert({
+                                    id: deduction.ingredientId,
+                                    household_id: this.householdId,
+                                    name: ingredientInfo.name,
+                                    category: ingredientInfo.category,
+                                    unit: ingredientInfo.unit
+                                })
+                            
+                            if (recreateError) throw recreateError
+                        }
+                    }
+                    
                     for (const batchUpdate of deduction.batchUpdates) {
-                        const { error } = await supabase
-                            .from('ingredient_batches')
-                            .update({ 
-                                quantity: batchUpdate.previousQuantity,
-                                status: batchUpdate.previousStatus
-                            })
-                            .eq('id', batchUpdate.batchId)
-                        
-                        if (error) throw error
+                        if (batchUpdate.wasDeleted) {
+                            // Recreate deleted batch with original expiry date
+                            const { error } = await supabase
+                                .from('ingredient_batches')
+                                .insert({
+                                    id: batchUpdate.batchId,
+                                    ingredient_id: deduction.ingredientId,
+                                    quantity: batchUpdate.previousQuantity,
+                                    expiry_date: batchUpdate.expiryDate,
+                                    status: batchUpdate.previousStatus
+                                })
+                            
+                            if (error) throw error
+                        } else {
+                            // Restore updated batch
+                            const { error } = await supabase
+                                .from('ingredient_batches')
+                                .update({ 
+                                    quantity: batchUpdate.previousQuantity,
+                                    status: batchUpdate.previousStatus
+                                })
+                                .eq('id', batchUpdate.batchId)
+                            
+                            if (error) throw error
+                        }
                     }
                 }
                 
@@ -673,6 +751,47 @@ export default {
             if (this.undoTimer) {
                 clearTimeout(this.undoTimer)
                 this.undoTimer = null
+            }
+        },
+        
+        async logConsumption() {
+            if (!this.lastDeduction || !this.householdId) return
+            
+            try {
+                const consumptionLogs = []
+                
+                // Create one log entry per ingredient (sum all batches)
+                for (const deduction of this.lastDeduction.deductions) {
+                    // Sum up total quantity used from all batches for this ingredient
+                    let totalQuantityUsed = 0
+                    for (const batchUpdate of deduction.batchUpdates) {
+                        totalQuantityUsed += batchUpdate.deductedAmount
+                    }
+                    
+                    // Create single log entry for this ingredient
+                    consumptionLogs.push({
+                        ingredient_id: deduction.ingredientId,
+                        batch_id: null,  // Not tracking specific batch since we're consolidating
+                        user_id: this.householdId,
+                        quantity_used: totalQuantityUsed,
+                        recipe_name: this.lastDeduction.recipeName,
+                        consumed_date: this.lastDeduction.timestamp
+                    })
+                }
+                
+                // Insert all consumption logs
+                if (consumptionLogs.length > 0) {
+                    const { error } = await supabase
+                        .from('consumption_logs')
+                        .insert(consumptionLogs)
+                    
+                    if (error) {
+                        console.error('Error logging consumption:', error)
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error in logConsumption:', error)
             }
         }
     },
@@ -801,10 +920,7 @@ export default {
 
         <!-- Loading State -->
         <div v-if="loading" class="text-center my-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-3">Finding delicious recipes...</p>
+            <RecipeLoadingSkeleton v-if="loading" :skeleton-count="6" />
         </div>
 
         <!-- Error State -->
