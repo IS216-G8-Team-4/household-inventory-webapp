@@ -157,22 +157,22 @@ export default {
   <div class="edit-profile-wrapper">
     <div class="edit-profile-container">
       <div class="profile-header">
-        <div class="icon-circle">
+        <div class="icon-circle mx-auto mb-3">
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" stroke="white" stroke-width="2">
             <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
         </div>
         <h2>Edit Profile</h2>
-        <p class="subtitle">Update your personal information and preferences</p>
+        <p class="subtitle mb-0">Update your personal information and preferences</p>
       </div>
 
       <div class="profile-form">
         <!-- Avatar -->
-        <div class="avatar-section">
+        <div class="avatar-section text-center mb-4">
           <h3 class="avatar-title">Profile Picture</h3>
-          <img :src="'/avatars/' + avatar_url" alt="Current Avatar" class="current-avatar" />
-          <div class="avatar-grid">
+          <img :src="'/avatars/' + avatar_url" alt="Current Avatar" class="current-avatar mb-3" />
+          <div class="d-flex justify-content-center flex-wrap gap-2">
             <div
               v-for="(avatar, index) in availableAvatars"
               :key="index"
@@ -186,51 +186,55 @@ export default {
         </div>
 
         <!-- Profile Fields -->
-        <div class="form-group">
-          <label><span class="label-icon">👤</span> Profile Name</label>
-          <input v-model="profile_name" type="text" placeholder="Enter your name" class="form-input" />
+        <div class="mb-4">
+          <label class="form-label"><span class="label-icon">👤</span> Profile Name</label>
+          <input v-model="profile_name" type="text" placeholder="Enter your name" class="form-control form-input" />
         </div>
 
-        <div class="form-group">
-          <label><span class="label-icon">⚠️</span> Food Allergens</label>
-          <input v-model="food_allergens" type="text" placeholder="e.g., Peanuts, Dairy, Shellfish" class="form-input" />
+        <div class="mb-4">
+          <label class="form-label"><span class="label-icon">⚠️</span> Food Allergens</label>
+          <input v-model="food_allergens" type="text" placeholder="e.g., Peanuts, Dairy, Shellfish" class="form-control form-input" />
         </div>
 
-        <div class="form-group">
-          <label><span class="label-icon">🍽️</span> Preferred Cuisines</label>
-          <input v-model="preferred_cuisines" type="text" placeholder="e.g., Italian, Chinese, Mexican" class="form-input" />
+        <div class="mb-4">
+          <label class="form-label"><span class="label-icon">🍽️</span> Preferred Cuisines</label>
+          <input v-model="preferred_cuisines" type="text" placeholder="e.g., Italian, Chinese, Mexican" class="form-control form-input" />
         </div>
 
         <!-- Buttons -->
-        <div class="button-group">
-          <button class="btn btn-update" @click="updateProfile">💾 Save Changes</button>
-          <button class="btn btn-cancel" @click="cancelEdit">✖ Cancel</button>
+        <div class="row g-3 mb-4">
+          <div class="col-6">
+            <button class="btn btn-update w-100" @click="updateProfile">💾 Save Changes</button>
+          </div>
+          <div class="col-6">
+            <button class="btn btn-cancel w-100" @click="cancelEdit">✖ Cancel</button>
+          </div>
         </div>
 
-        <button type="button" class="btn btn-delete" @click="deleteProfile">🗑 Delete Profile</button>
+        <button type="button" class="btn btn-delete w-100" @click="deleteProfile">🗑 Delete Profile</button>
       </div>
     </div>
 
-    <!-- ✅ Custom confirmation toast (same design theme, minimal) -->
+    <!-- Custom confirmation toast -->
     <transition name="fade">
       <div v-if="showDeleteConfirm" class="confirm-toast">
-        <div class="confirm-header">
+        <div class="d-flex gap-3 align-items-center mb-3">
           <div class="confirm-icon">⚠️</div>
           <div class="confirm-text">
             <strong>Confirm Delete</strong>
-            <p>This action cannot be undone.</p>
+            <p class="mb-0">This action cannot be undone.</p>
           </div>
         </div>
-        <div class="confirm-actions">
-          <button class="confirm-btn delete" @click="confirmDelete">Yes, Delete</button>
-          <button class="confirm-btn cancel" @click="cancelDelete">Cancel</button>
+        <div class="d-flex justify-content-between gap-2">
+          <button class="confirm-btn delete flex-fill" @click="confirmDelete">Yes, Delete</button>
+          <button class="confirm-btn cancel flex-fill" @click="cancelDelete">Cancel</button>
         </div>
       </div>
     </transition>
 
     <!-- Toast -->
     <transition name="toast-slide">
-      <div v-if="showToast" class="toast" :class="toastType">{{ toastMessage }}</div>
+      <div v-if="showToast" class="toast-notification" :class="toastType">{{ toastMessage }}</div>
     </transition>
   </div>
 </template>
@@ -248,15 +252,18 @@ export default {
   width: 320px;
   animation: slideUp 0.3s ease-out;
   color: #065f46;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  z-index: 1050;
 }
 
-.confirm-header {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .confirm-icon {
@@ -269,19 +276,12 @@ export default {
 }
 
 .confirm-text p {
-  margin: 2px 0 0;
+  margin-top: 2px;
   font-size: 0.9rem;
   color: #047857;
 }
 
-.confirm-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .confirm-btn {
-  flex: 1;
   padding: 0.6rem 1rem;
   border: none;
   border-radius: 8px;
@@ -316,10 +316,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 1rem;
 }
 
-.toast {
+.toast-notification {
   position: fixed;
   top: 20px;
   left: 50%;
@@ -332,11 +331,11 @@ export default {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
 }
 
-.toast.success {
+.toast-notification.success {
   background: linear-gradient(135deg, #43a047, #2e7d32);
 }
 
-.toast.error {
+.toast-notification.error {
   background: linear-gradient(135deg, #e53935, #c62828);
 }
 
@@ -355,16 +354,19 @@ export default {
   transform: translate(-50%, -20px);
 }
 
-/* Existing layout */
-.avatar-section {
-  text-align: center;
-  margin-bottom: 2rem;
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .avatar-title {
   font-weight: 600;
   color: #2e7d32;
-  margin-bottom: 1rem;
 }
 
 .current-avatar {
@@ -374,14 +376,6 @@ export default {
   object-fit: cover;
   border: 3px solid #2e7d32;
   box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
-  margin-bottom: 1rem;
-}
-
-.avatar-grid {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
 }
 
 .avatar-option {
@@ -444,16 +438,12 @@ export default {
   padding: 2rem;
 }
 
-.form-group {
-  margin-bottom: 1.75rem;
-}
-
 .label-icon {
   font-size: 1.2rem;
+  margin-right: 0.25rem;
 }
 
 .form-input {
-  width: 100%;
   padding: 0.875rem 1rem;
   border: 2px solid #e0e0e0;
   border-radius: 12px;
@@ -463,17 +453,9 @@ export default {
 }
 
 .form-input:focus {
-  outline: none;
   border-color: #2e7d32;
   background: white;
   box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.1);
-}
-
-.button-group {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 2rem;
 }
 
 .btn {
@@ -490,14 +472,30 @@ export default {
   color: white;
 }
 
+.btn-update:hover {
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
+}
+
 .btn-cancel {
   background: #f5f5f5;
   color: #616161;
 }
 
+.btn-cancel:hover {
+  background: #e0e0e0;
+  transform: translateY(-2px);
+}
+
 .btn-delete {
   background: linear-gradient(135deg, #d32f2f, #c62828);
   color: white;
-  width: 100%;
+}
+
+.btn-delete:hover {
+  background: linear-gradient(135deg, #b71c1c, #d32f2f);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
 }
 </style>

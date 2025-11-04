@@ -147,113 +147,125 @@ export default {
 
 <template>
   <div class="create-profile-wrapper">
-    <div class="create-profile-container">
-      <div class="profile-header">
-        <div class="header-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="8.5" cy="7" r="4"></circle>
-            <line x1="20" y1="8" x2="20" y2="14"></line>
-            <line x1="23" y1="11" x2="17" y2="11"></line>
-          </svg>
-        </div>
-        <h2>Create New Profile</h2>
-        <p class="subtitle">Add a new household member with their preferences</p>
-      </div>
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-12 col-md-10 col-lg-8 col-xl-6">
+          <div class="create-profile-container">
+            <div class="profile-header">
+              <div class="header-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="8.5" cy="7" r="4"></circle>
+                  <line x1="20" y1="8" x2="20" y2="14"></line>
+                  <line x1="23" y1="11" x2="17" y2="11"></line>
+                </svg>
+              </div>
+              <h2>Create New Profile</h2>
+              <p class="subtitle">Add a new household member with their preferences</p>
+            </div>
 
-      <div class="profile-form">
-        <div class="form-group">
-          <label for="profile-name">
-            <span class="label-icon">👤</span>
-            Profile Name
-            <span class="required">*</span>
-          </label>
-          <input 
-            id="profile-name"
-            v-model="profileName" 
-            type="text"
-            placeholder="e.g., John, Mom, Dad"
-            class="form-input"
-          />
-        </div>
+            <div class="profile-form">
+              <div class="mb-4">
+                <label for="profile-name" class="form-label d-flex align-items-center">
+                  <span class="label-icon me-2">👤</span>
+                  Profile Name
+                  <span class="required ms-1">*</span>
+                </label>
+                <input 
+                  id="profile-name"
+                  v-model="profileName" 
+                  type="text"
+                  placeholder="e.g., John, Mom, Dad"
+                  class="form-control form-input"
+                />
+              </div>
 
-        <div class="form-group">
-          <label for="allergens">
-            <span class="label-icon">⚠️</span>
-            Food Allergens
-          </label>
-          <input 
-            id="allergens"
-            v-model="foodAllergens" 
-            type="text"
-            placeholder="e.g., Peanuts, Shellfish, Dairy"
-            class="form-input"
-          />
-          <span class="helper-text">Separate multiple allergens with commas</span>
-        </div>
+              <div class="mb-4">
+                <label for="allergens" class="form-label d-flex align-items-center">
+                  <span class="label-icon me-2">⚠️</span>
+                  Food Allergens
+                </label>
+                <input 
+                  id="allergens"
+                  v-model="foodAllergens" 
+                  type="text"
+                  placeholder="e.g., Peanuts, Shellfish, Dairy"
+                  class="form-control form-input"
+                />
+                <small class="form-text helper-text">Separate multiple allergens with commas</small>
+              </div>
 
-        <div class="form-group">
-          <label for="dietary">
-            <span class="label-icon">🥗</span>
-            Dietary Preferences
-          </label>
-          <div class="dietary-options">
-            <label class="checkbox-label" v-for="diet in dietaryOptions" :key="diet">
-              <input 
-                type="checkbox" 
-                :value="diet" 
-                v-model="selectedDiets"
-                class="checkbox-input"
-              />
-              <span class="checkbox-custom"></span>
-              <span class="checkbox-text">{{ diet }}</span>
-            </label>
+              <div class="mb-4">
+                <label class="form-label d-flex align-items-center">
+                  <span class="label-icon me-2">🥗</span>
+                  Dietary Preferences
+                </label>
+                <div class="row g-2 dietary-options">
+                  <div class="col-12 col-sm-6" v-for="diet in dietaryOptions" :key="diet">
+                    <label class="checkbox-label">
+                      <input 
+                        type="checkbox" 
+                        :value="diet" 
+                        v-model="selectedDiets"
+                        class="checkbox-input"
+                      />
+                      <span class="checkbox-custom"></span>
+                      <span class="checkbox-text">{{ diet }}</span>
+                    </label>
+                  </div>
+                </div>
+                <small class="form-text helper-text">Select all that apply</small>
+              </div>
+
+              <div class="mb-4">
+                <label for="cuisines" class="form-label d-flex align-items-center">
+                  <span class="label-icon me-2">🍽️</span>
+                  Preferred Cuisines
+                </label>
+                <input 
+                  id="cuisines"
+                  v-model="preferredCuisines" 
+                  type="text"
+                  placeholder="e.g., Italian, Chinese, Mexican"
+                  class="form-control form-input"
+                />
+                <small class="form-text helper-text">Separate multiple cuisines with commas</small>
+              </div>
+
+              <div class="row g-3 mt-4">
+                <div class="col-12 col-sm-6">
+                  <button type="button" class="btn btn-create w-100 d-flex align-items-center justify-content-center" @click="createProfile" :disabled="isBusy">
+                    <svg v-if="!isBusy" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                      <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                      <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                    <div v-else class="spinner-small me-2"></div>
+                    <span v-if="!isBusy">Create Profile</span>
+                    <span v-else>Creating...</span>
+                  </button>
+                </div>
+                <div class="col-12 col-sm-6">
+                  <button type="button" class="btn btn-cancel w-100 d-flex align-items-center justify-content-center" @click="cancelCreate" :disabled="isBusy">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <transition name="fade">
+              <div v-if="message" :class="['alert', messageType]">
+                <span class="alert-icon">{{ messageType === 'success' ? '✓' : '✕' }}</span>
+                <span>{{ message }}</span>
+              </div>
+            </transition>
           </div>
-          <span class="helper-text">Select all that apply</span>
-        </div>
-
-        <div class="form-group">
-          <label for="cuisines">
-            <span class="label-icon">🍽️</span>
-            Preferred Cuisines
-          </label>
-          <input 
-            id="cuisines"
-            v-model="preferredCuisines" 
-            type="text"
-            placeholder="e.g., Italian, Chinese, Mexican"
-            class="form-input"
-          />
-          <span class="helper-text">Separate multiple cuisines with commas</span>
-        </div>
-
-        <div class="button-group">
-          <button type="button" class="btn btn-create" @click="createProfile" :disabled="isBusy">
-            <svg v-if="!isBusy" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-              <polyline points="17 21 17 13 7 13 7 21"></polyline>
-              <polyline points="7 3 7 8 15 8"></polyline>
-            </svg>
-            <div v-else class="spinner-small"></div>
-            <span v-if="!isBusy">Create Profile</span>
-            <span v-else>Creating...</span>
-          </button>
-          <button type="button" class="btn btn-cancel" @click="cancelCreate" :disabled="isBusy">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-            Cancel
-          </button>
         </div>
       </div>
-
-      <transition name="fade">
-        <div v-if="message" :class="['alert', messageType]">
-          <span class="alert-icon">{{ messageType === 'success' ? '✓' : '✕' }}</span>
-          <span>{{ message }}</span>
-        </div>
-      </transition>
     </div>
   </div>
 </template>
@@ -265,12 +277,9 @@ export default {
   padding: 2rem 1rem;
   display: flex;
   align-items: center;
-  justify-content: center;
 }
 
 .create-profile-container {
-  max-width: 600px;
-  width: 100%;
   background: #ffffff;
   border-radius: 24px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
@@ -355,18 +364,11 @@ export default {
   padding: 2rem;
 }
 
-.form-group {
-  margin-bottom: 1.75rem;
-}
-
-.form-group label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.form-label {
   font-weight: 600;
   color: #2e7d32;
-  margin-bottom: 0.5rem;
   font-size: 0.95rem;
+  margin-bottom: 0.5rem;
 }
 
 .label-icon {
@@ -379,18 +381,15 @@ export default {
 }
 
 .form-input {
-  width: 100%;
   padding: 0.875rem 1rem;
   border: 2px solid #e0e0e0;
   border-radius: 12px;
   font-size: 1rem;
   transition: all 0.3s ease;
   background: #fafafa;
-  box-sizing: border-box;
 }
 
 .form-input:focus {
-  outline: none;
   border-color: #2e7d32;
   background: white;
   box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.1);
@@ -410,9 +409,6 @@ export default {
 
 /* Dietary Options */
 .dietary-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 0.75rem;
   margin-bottom: 0.5rem;
 }
 
@@ -427,6 +423,8 @@ export default {
   border-radius: 10px;
   transition: all 0.2s ease;
   user-select: none;
+  width: 100%;
+  height: 100%;
 }
 
 .checkbox-label:hover {
@@ -473,27 +471,15 @@ export default {
   font-weight: 600;
 }
 
-/* Button Group */
-.button-group {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
+/* Buttons */
 .btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
   padding: 0.875rem 1.5rem;
-  border: none;
   border-radius: 12px;
   font-size: 1rem;
   font-weight: 600;
-  cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none;
 }
 
 .btn:disabled {
@@ -517,6 +503,7 @@ export default {
 
 .btn-create:not(:disabled):hover {
   background: linear-gradient(135deg, #1b5e20, #2e7d32);
+  color: white;
 }
 
 .btn-cancel {
@@ -526,6 +513,7 @@ export default {
 
 .btn-cancel:not(:disabled):hover {
   background: #e0e0e0;
+  color: #616161;
 }
 
 /* Spinner */
@@ -611,12 +599,8 @@ export default {
   opacity: 0;
 }
 
-/* Responsive Design */
-@media (max-width: 640px) {
-  .create-profile-wrapper {
-    padding: 1rem;
-  }
-
+/* Responsive adjustments */
+@media (max-width: 576px) {
   .profile-header {
     padding: 2rem 1.5rem 1.5rem;
   }
@@ -627,19 +611,6 @@ export default {
 
   .profile-form {
     padding: 1.5rem;
-  }
-
-  .dietary-options {
-    grid-template-columns: 1fr;
-  }
-
-  .button-group {
-    grid-template-columns: 1fr;
-  }
-
-  .alert {
-    right: 1rem;
-    left: 1rem;
   }
 }
 </style>
