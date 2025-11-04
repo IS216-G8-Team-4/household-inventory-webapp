@@ -14,6 +14,7 @@ export default {
             initialising: true,
             loading: false,
             error: null,
+            showHowItWorksModal: false,
             
             filters: {
                 cuisine: '',
@@ -146,6 +147,14 @@ export default {
             } catch (error) {
                 console.error('Error in fetchSession:', error)
             }
+        },
+
+        showEmptyStateHelp() {
+            this.showHowItWorksModal = true;
+        },
+
+        closeHowItWorksModal() {
+            this.showHowItWorksModal = false;
         },
 
         async fetchHouseholdId() {
@@ -857,13 +866,82 @@ export default {
         </div>
 
         <!-- Empty State when no inventory -->
-        <div v-if="!initialising && !loading && inventory.length === 0">
-            <div class="empty-state-icon">🥗</div>
-            <h3>Your Pantry is Empty</h3>
-            <p>Add ingredients to your inventory to get personalized recipe suggestions!</p>
-            <router-link to="/inventory" class="btn btn-primary">
-                Add Ingredients
-            </router-link>
+        <div v-if="!initialising && !loading && inventory.length === 0" class="empty-state-container">
+            <div class="empty-state-card">
+                <!-- Illustration/Icon Section -->
+                <div class="empty-state-visual">
+                    <div class="empty-state-icon-wrapper">
+                        <span class="empty-state-icon-large">🥗</span>
+                        <span class="empty-state-icon-accent">🍅</span>
+                        <span class="empty-state-icon-accent">🥕</span>
+                        <span class="empty-state-icon-accent">🧀</span>
+                    </div>
+                </div>
+            
+                <!-- Content Section -->
+                <div class="empty-state-content">
+                    <h2 class="empty-state-title">Your Recipe Journey Starts Here!</h2>
+                    <p class="empty-state-description">
+                        Add ingredients to your pantry and unlock personalised recipe suggestions 
+                        tailored to what you have on hand.
+                    </p>
+                    
+                    <!-- Feature Highlights -->
+                    <div class="empty-state-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">✨</span>
+                            <span class="feature-text">Smart Matching</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">⏰</span>
+                            <span class="feature-text">Use Expiring Items</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🌍</span>
+                            <span class="feature-text">Global Cuisines</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Call to Action -->
+                    <div class="empty-state-actions">
+                        <router-link to="/inventory" class="btn-empty-state btn-primary-empty">
+                            <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M12 5v14M5 12h14" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Add Your First Ingredient
+                        </router-link>
+                        <button class="btn-empty-state btn-secondary-empty" @click="showEmptyStateHelp">
+                            <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                                <path d="M12 16v-4M12 8h.01" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            How It Works
+                        </button>
+                    </div>
+                </div>
+            
+                <!-- Optional: Preview Cards -->
+                <div class="empty-state-preview">
+                    <p class="preview-label">What you'll get:</p>
+                    <div class="preview-cards">
+                        <div class="preview-card">
+                            <div class="preview-badge">80% Match</div>
+                            <div class="preview-image">🍝</div>
+                            <p class="preview-title">Recipe Suggestions</p>
+                        </div>
+                        <div class="preview-card">
+                            <div class="preview-badge">⏰ Alert</div>
+                            <div class="preview-image">📅</div>
+                            <p class="preview-title">Expiry Tracking</p>
+                        </div>
+                        <div class="preview-card">
+                            <div class="preview-badge">Smart Tips</div>
+                            <div class="preview-image">💡</div>
+                            <p class="preview-title">Reduce Waste</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Filters Section (only show if inventory has items) -->
@@ -1291,6 +1369,135 @@ export default {
                                 Use Recipe
                             </span>
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HOW IT WORKS MODAL -->
+        <div 
+            v-if="showHowItWorksModal" 
+            class="recipe-modal" 
+            @click.self="closeHowItWorksModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="how-it-works-title"
+        >
+            <div class="recipe-modal-content how-it-works-modal">
+                <button 
+                    class="btn-close-modal" 
+                    @click="closeHowItWorksModal"
+                    aria-label="Close how it works guide"
+                >
+                    &times;
+                </button>
+                
+                <div class="how-it-works-content">
+                    <!-- Header -->
+                    <div class="how-it-works-header">
+                        <div class="how-it-works-icon-badge">
+                            <span class="badge-icon">✨</span>
+                        </div>
+                        <h2 id="how-it-works-title" class="how-it-works-title">How Recipe Suggestions Work</h2>
+                        <p class="how-it-works-subtitle">Get personalised recipes based on your pantry</p>
+                    </div>
+                    
+                    <!-- Steps -->
+                    <div class="how-it-works-steps">
+                        <div class="step-card">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-icon">🥬</div>
+                                <h3 class="step-title">Add Your Ingredients</h3>
+                                <p class="step-description">
+                                    Start by adding ingredients from your pantry to your inventory. 
+                                    Include expiry dates to track freshness.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="step-arrow">→</div>
+                        
+                        <div class="step-card">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-icon">🔍</div>
+                                <h3 class="step-title">Smart Matching</h3>
+                                <p class="step-description">
+                                    Our system analyses your inventory and finds recipes that match 
+                                    your available ingredients.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="step-arrow">→</div>
+                        
+                        <div class="step-card">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-icon">⏰</div>
+                                <h3 class="step-title">Prioritise Expiring Items</h3>
+                                <p class="step-description">
+                                    Recipes using ingredients expiring soon are highlighted, 
+                                    helping you reduce food waste.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="step-arrow">→</div>
+                        
+                        <div class="step-card">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-icon">🍳</div>
+                                <h3 class="step-title">Cook & Track</h3>
+                                <p class="step-description">
+                                    Select a recipe to cook, and we'll automatically deduct 
+                                    used ingredients from your inventory.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Features -->
+                    <div class="how-it-works-features">
+                        <h3 class="features-title">What You Get:</h3>
+                        <div class="features-grid">
+                            <div class="feature-box">
+                                <span class="feature-box-icon">📊</span>
+                                <span class="feature-box-text">Match percentage for each recipe</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">🌍</span>
+                                <span class="feature-box-text">Recipes from global cuisines</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">🎯</span>
+                                <span class="feature-box-text">Filter by cuisine & dietary needs</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">📹</span>
+                                <span class="feature-box-text">Video tutorials included</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">♻️</span>
+                                <span class="feature-box-text">Reduce food waste</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">💡</span>
+                                <span class="feature-box-text">See missing ingredients</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Call to Action -->
+                    <div class="how-it-works-footer">
+                        <router-link to="/inventory" class="btn-modal-cta" @click="closeHowItWorksModal">
+                            <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M12 5v14M5 12h14" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Start Adding Ingredients
+                        </router-link>
                     </div>
                 </div>
             </div>
@@ -2538,6 +2745,497 @@ export default {
     stroke-width: 2.5;
 }
 
+/* ===== ENHANCED EMPTY STATE ===== */
+.empty-state-container {
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.empty-state-card {
+    max-width: 800px;
+    width: 100%;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    padding: 50px 40px;
+    text-align: center;
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Visual Section */
+.empty-state-visual {
+    margin-bottom: 30px;
+    position: relative;
+    height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.empty-state-icon-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.empty-state-icon-large {
+    font-size: 120px;
+    display: block;
+    animation: float 3s ease-in-out infinite;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.1));
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+}
+
+.empty-state-icon-accent {
+    position: absolute;
+    font-size: 40px;
+    animation: orbit 4s linear infinite;
+}
+
+.empty-state-icon-accent:nth-child(2) {
+    animation-delay: 0s;
+}
+
+.empty-state-icon-accent:nth-child(3) {
+    animation-delay: 1.3s;
+}
+
+.empty-state-icon-accent:nth-child(4) {
+    animation-delay: 2.6s;
+}
+
+@keyframes orbit {
+    0% {
+        transform: rotate(0deg) translateX(80px) rotate(0deg);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 1;
+    }
+    100% {
+        transform: rotate(360deg) translateX(80px) rotate(-360deg);
+        opacity: 0;
+    }
+}
+
+/* Content Section */
+.empty-state-content {
+    margin-bottom: 40px;
+}
+
+.empty-state-title {
+    font-size: 2.2em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 15px 0;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.empty-state-description {
+    font-size: 1.1em;
+    color: #6c757d;
+    line-height: 1.6;
+    max-width: 600px;
+    margin: 0 auto 30px;
+}
+
+/* Feature Highlights */
+.empty-state-features {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+    margin: 30px 0;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: #f8f9fa;
+    border-radius: 25px;
+    transition: all 0.3s ease;
+}
+
+.feature-item:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.feature-icon {
+    font-size: 1.5em;
+}
+
+.feature-text {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Call to Action Buttons */
+.empty-state-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 30px;
+}
+
+.btn-empty-state {
+    padding: 16px 32px;
+    border-radius: 12px;
+    font-size: 1.05em;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary-empty {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+}
+
+.btn-primary-empty:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.btn-secondary-empty {
+    background: white;
+    color: #4CAF50;
+    border: 2px solid #4CAF50;
+}
+
+.btn-secondary-empty:hover {
+    background: #f8f9fa;
+    transform: translateY(-2px);
+}
+
+.btn-icon-left {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+}
+
+/* Preview Section */
+.empty-state-preview {
+    margin-top: 50px;
+    padding-top: 40px;
+    border-top: 2px dashed #e9ecef;
+}
+
+.preview-label {
+    font-size: 0.9em;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.preview-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.preview-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    padding: 24px;
+    border-radius: 12px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.preview-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.preview-card:hover {
+    border-color: #4CAF50;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.preview-card:hover::before {
+    transform: scaleX(1);
+}
+
+.preview-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    background: #e9ecef;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 12px;
+}
+
+.preview-image {
+    font-size: 3em;
+    margin: 15px 0;
+}
+
+.preview-title {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+}
+
+/* ===== HOW IT WORKS MODAL ===== */
+.how-it-works-modal {
+    max-width: 900px;
+    padding: 0;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+.how-it-works-content {
+    padding: 40px;
+}
+
+/* Header */
+.how-it-works-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.how-it-works-icon-badge {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.badge-icon {
+    font-size: 2.5em;
+}
+
+.how-it-works-title {
+    font-size: 2em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 10px 0;
+}
+
+.how-it-works-subtitle {
+    font-size: 1.1em;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* Steps */
+.how-it-works-steps {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 40px;
+    overflow-x: auto;
+    padding: 20px 0;
+}
+
+.step-card {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 16px;
+    padding: 24px;
+    min-width: 180px;
+    flex: 1;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.step-card:hover {
+    border-color: #4CAF50;
+    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.15);
+    transform: translateY(-4px);
+}
+
+.step-number {
+    position: absolute;
+    top: -12px;
+    left: 20px;
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9em;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.step-content {
+    text-align: center;
+}
+
+.step-icon {
+    font-size: 2.5em;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.step-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 8px 0;
+}
+
+.step-description {
+    font-size: 0.9em;
+    color: #6c757d;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.step-arrow {
+    font-size: 2em;
+    color: #4CAF50;
+    flex-shrink: 0;
+    animation: arrowBounce 1.5s ease-in-out infinite;
+}
+
+@keyframes arrowBounce {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(5px); }
+}
+
+/* Features Section */
+.how-it-works-features {
+    background: #f8f9fa;
+    border-radius: 16px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.features-title {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 20px 0;
+    text-align: center;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.feature-box {
+    background: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.feature-box:hover {
+    border-color: #4CAF50;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.1);
+}
+
+.feature-box-icon {
+    font-size: 1.8em;
+    flex-shrink: 0;
+}
+
+.feature-box-text {
+    font-size: 0.95em;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* Footer */
+.how-it-works-footer {
+    text-align: center;
+}
+
+.btn-modal-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 32px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-modal-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.btn-modal-cta:focus {
+    outline: 3px solid rgba(76, 175, 80, 0.5);
+    outline-offset: 2px;
+}
+
 /* ===== RESPONSIVE DESIGN ===== */
 @media (max-width: 1024px) {
     .recipe-detail-layout-styled {
@@ -2636,6 +3334,77 @@ export default {
         width: 100%;
         height: 44px;
     }
+
+    /* Empty state responsive */
+    .empty-state-card {
+        padding: 40px 25px;
+    }
+    
+    .empty-state-title {
+        font-size: 1.8em;
+    }
+    
+    .empty-state-description {
+        font-size: 1em;
+    }
+    
+    .empty-state-icon-large {
+        font-size: 90px;
+    }
+    
+    .empty-state-features {
+        gap: 15px;
+    }
+    
+    .feature-item {
+        padding: 10px 16px;
+    }
+    
+    .empty-state-actions {
+        flex-direction: column;
+    }
+    
+    .btn-empty-state {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .preview-cards {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    /* How it works modal responsive */
+    .how-it-works-content {
+        padding: 30px 20px;
+    }
+    
+    .how-it-works-title {
+        font-size: 1.6em;
+    }
+    
+    .how-it-works-steps {
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .step-arrow {
+        transform: rotate(90deg);
+        margin: -10px 0;
+    }
+    
+    @keyframes arrowBounce {
+        0%, 100% { transform: rotate(90deg) translateX(0); }
+        50% { transform: rotate(90deg) translateX(5px); }
+    }
+    
+    .step-card {
+        min-width: 100%;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
@@ -2679,6 +3448,68 @@ export default {
         font-size: 0.9em;
         padding: 10px 16px;
     }
+
+    /* Empty state mobile */
+    .empty-state-container {
+        padding: 20px 15px;
+    }
+    
+    .empty-state-card {
+        padding: 30px 20px;
+    }
+    
+    .empty-state-title {
+        font-size: 1.5em;
+    }
+    
+    .empty-state-visual {
+        height: 140px;
+    }
+    
+    .empty-state-icon-large {
+        font-size: 70px;
+    }
+    
+    .empty-state-icon-accent {
+        font-size: 30px;
+    }
+    
+    @keyframes orbit {
+        0%, 100% {
+            transform: rotate(0deg) translateX(60px) rotate(0deg);
+            opacity: 0;
+        }
+        10%, 90% {
+            opacity: 1;
+        }
+    }
+
+    /* How it works modal mobile */
+    .how-it-works-content {
+        padding: 25px 15px;
+    }
+    
+    .how-it-works-icon-badge {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .badge-icon {
+        font-size: 2em;
+    }
+    
+    .how-it-works-title {
+        font-size: 1.4em;
+    }
+    
+    .step-icon {
+        font-size: 2em;
+    }
+    
+    .btn-modal-cta {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 /* ===== ACCESSIBILITY ===== */
@@ -2710,6 +3541,27 @@ select:focus-visible {
     .btn-sidebar,
     .undo-btn {
         border: 2px solid currentColor;
+    }
+}
+
+/* Focus States for Accessibility */
+.btn-empty-state:focus-visible {
+    outline: 3px solid #4CAF50;
+    outline-offset: 3px;
+}
+
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .empty-state-icon-large,
+    .empty-state-icon-accent,
+    .empty-state-card,
+    .how-it-works-icon-badge,
+    .step-arrow {
+        animation: none !important;
+    }
+    
+    .preview-card::before {
+        transition: none;
     }
 }
 </style>
