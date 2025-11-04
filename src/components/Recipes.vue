@@ -11,8 +11,10 @@ export default {
             expiringIngredients: [],
             recipes: [],
             filteredRecipes: [],
+            initialising: true,
             loading: false,
             error: null,
+            showHowItWorksModal: false,
             
             filters: {
                 cuisine: '',
@@ -38,7 +40,12 @@ export default {
             
             showUndoNotification: false,
             undoTimer: null,
-            lastDeduction: null
+            lastDeduction: null,
+            undoTimeRemaining: 15,
+            
+            showSuccessNotification: false,
+            successMessage: '',
+            successTimer: null
         }
     },
 
@@ -100,7 +107,6 @@ export default {
             })
         },
         
-        // Sorted ingredients for modal display (shows available first then missing)
         sortedRecipeIngredients() {
             if (!this.selectedRecipe) return []
             
@@ -116,18 +122,20 @@ export default {
                     index: index,
                     isAvailable: isAvailable,
                     isExpiring: isExpiring,
-                    // Sort priority: expiring first (0), available (1), missing (2)
                     sortOrder: isExpiring ? 0 : (isAvailable ? 1 : 2)
                 }
             })
             
-            // Sort by sortOrder, then alphabetically
             return ingredientsWithStatus.sort((a, b) => {
                 if (a.sortOrder !== b.sortOrder) {
                     return a.sortOrder - b.sortOrder
                 }
                 return a.name.localeCompare(b.name)
             })
+        },
+        
+        undoProgressWidth() {
+            return (this.undoTimeRemaining / 15) * 100
         }
     },
     
@@ -143,6 +151,14 @@ export default {
             } catch (error) {
                 console.error('Error in fetchSession:', error)
             }
+        },
+
+        showEmptyStateHelp() {
+            this.showHowItWorksModal = true;
+        },
+
+        closeHowItWorksModal() {
+            this.showHowItWorksModal = false;
         },
 
         async fetchHouseholdId() {
@@ -435,7 +451,6 @@ export default {
                 const invItem = inventoryItem.toLowerCase().trim();
                 const inventoryWords = invItem.split(/\s+/);
                 
-                // All exact words from recipe ingredient must appear in inventory item
                 return recipeWords.every(word => inventoryWords.includes(word));
             });
         },
@@ -446,7 +461,6 @@ export default {
             
             return this.expiringIngredientNames.some(expiring => {
                 const expiringWords = expiring.toLowerCase().trim().split(/\s+/);
-                // All words from recipe ingredient must appear in expiring item
                 return recipeWords.every(word => expiringWords.includes(word));
             });
         },
@@ -461,7 +475,6 @@ export default {
                 const ingredientName = recipeIngredients[i]
                 const measure = this.getIngredientMeasure(recipe, i + 1)
                 
-                // Use precise word-based matching
                 const recipeWords = ingredientName.toLowerCase().trim().split(/\s+/);
                 const inventoryItem = this.inventory.find(item => {
                     const inventoryWords = item.name.toLowerCase().trim().split(/\s+/);
@@ -567,10 +580,18 @@ export default {
                 this.closeRecipeModal()
                 
                 this.showUndoNotification = true
+                this.undoTimeRemaining = 15
+                
+                const countdownInterval = setInterval(() => {
+                    this.undoTimeRemaining--
+                    if (this.undoTimeRemaining <= 0) {
+                        clearInterval(countdownInterval)
+                    }
+                }, 1000)
                 
                 if (this.undoTimer) clearTimeout(this.undoTimer)
                 this.undoTimer = setTimeout(async () => {
-                    // After 15 seconds, log the consumption to the database
+                    clearInterval(countdownInterval)
                     await this.logConsumption()
                     
                     this.showUndoNotification = false
@@ -579,7 +600,7 @@ export default {
                 
             } catch (error) {
                 console.error('Error using recipe:', error)
-                alert('Failed to use recipe. Please try again.')
+                this.showSuccessMessage('Failed to use recipe. Please try again.', 'error')
             } finally {
                 this.usingRecipe = false
             }
@@ -605,7 +626,6 @@ export default {
                         const newQuantity = currentQuantity - deductAmount
                         
                         if (newQuantity <= 0) {
-                            // Delete batch if quantity reaches 0
                             const { error } = await supabase
                                 .from('ingredient_batches')
                                 .delete()
@@ -615,7 +635,6 @@ export default {
                             
                             batchesToDelete.push(batch.id)
                         } else {
-                            // Update batch with new quantity
                             const { error } = await supabase
                                 .from('ingredient_batches')
                                 .update({ 
@@ -641,7 +660,6 @@ export default {
                     }
                 }
                 
-                // Check if ingredient has any remaining batches
                 const { data: remainingBatches, error: checkError } = await supabase
                     .from('ingredient_batches')
                     .select('id')
@@ -649,7 +667,6 @@ export default {
                 
                 if (checkError) throw checkError
                 
-                // If no batches left, delete the ingredient
                 if (!remainingBatches || remainingBatches.length === 0) {
                     const { error: deleteError } = await supabase
                         .from('ingredients')
@@ -678,9 +695,7 @@ export default {
             
             try {
                 for (const deduction of this.lastDeduction.deductions) {
-                    // If the ingredient was deleted, recreate it first
                     if (deduction.ingredientDeleted) {
-                        // Find the ingredient details from inventory
                         const ingredientInfo = this.inventory.find(i => i.id === deduction.ingredientId)
                         if (ingredientInfo) {
                             const { error: recreateError } = await supabase
@@ -699,7 +714,6 @@ export default {
                     
                     for (const batchUpdate of deduction.batchUpdates) {
                         if (batchUpdate.wasDeleted) {
-                            // Recreate deleted batch with original expiry date
                             const { error } = await supabase
                                 .from('ingredient_batches')
                                 .insert({
@@ -712,7 +726,6 @@ export default {
                             
                             if (error) throw error
                         } else {
-                            // Restore updated batch
                             const { error } = await supabase
                                 .from('ingredient_batches')
                                 .update({ 
@@ -737,11 +750,11 @@ export default {
                     this.undoTimer = null
                 }
                 
-                alert('Recipe use has been undone successfully!')
+                this.showSuccessMessage('Recipe use has been undone successfully!')
                 
             } catch (error) {
                 console.error('Error undoing recipe use:', error)
-                alert('Failed to undo. Please check your inventory manually.')
+                this.showSuccessMessage('Failed to undo. Please check your inventory manually.', 'error')
             }
         },
         
@@ -754,24 +767,42 @@ export default {
             }
         },
         
+        showSuccessMessage(message, type = 'success') {
+            this.successMessage = message
+            this.showSuccessNotification = true
+            
+            if (this.successTimer) {
+                clearTimeout(this.successTimer)
+            }
+            
+            this.successTimer = setTimeout(() => {
+                this.showSuccessNotification = false
+            }, 4000)
+        },
+        
+        dismissSuccessNotification() {
+            this.showSuccessNotification = false
+            if (this.successTimer) {
+                clearTimeout(this.successTimer)
+                this.successTimer = null
+            }
+        },
+        
         async logConsumption() {
             if (!this.lastDeduction || !this.householdId) return
             
             try {
                 const consumptionLogs = []
                 
-                // Create one log entry per ingredient (sum all batches)
                 for (const deduction of this.lastDeduction.deductions) {
-                    // Sum up total quantity used from all batches for this ingredient
                     let totalQuantityUsed = 0
                     for (const batchUpdate of deduction.batchUpdates) {
                         totalQuantityUsed += batchUpdate.deductedAmount
                     }
                     
-                    // Create single log entry for this ingredient
                     consumptionLogs.push({
                         ingredient_id: deduction.ingredientId,
-                        batch_id: null,  // Not tracking specific batch since we're consolidating
+                        batch_id: null,
                         user_id: this.householdId,
                         quantity_used: totalQuantityUsed,
                         recipe_name: this.lastDeduction.recipeName,
@@ -779,7 +810,6 @@ export default {
                     })
                 }
                 
-                // Insert all consumption logs
                 if (consumptionLogs.length > 0) {
                     const { error } = await supabase
                         .from('consumption_logs')
@@ -813,22 +843,31 @@ export default {
     },
     
     async mounted() {
+        this.initialising = true
         await this.fetchSession()
         await this.fetchHouseholdId()
         
         if (this.householdId) {
             await this.fetchInventory()
             await this.fetchExpiringIngredients()
-            await this.loadRecipes()
+            
+            // Only load recipes if inventory is not empty
+            if (this.inventory.length > 0) {
+                await this.loadRecipes()
+            }
         } else {
             console.error('Unable to load recipes: No household ID available')
             this.error = 'Unable to load your household data. Please make sure you have a household set up.'
         }
+        this.initialising = false
     },
     
     beforeUnmount() {
         if (this.undoTimer) {
             clearTimeout(this.undoTimer)
+        }
+        if (this.successTimer) {
+            clearTimeout(this.successTimer)
         }
     }
 }
@@ -842,17 +881,96 @@ export default {
             <p class="subtitle">Based on your available ingredients</p>
             
             <div v-if="expiringIngredients.length > 0" class="expiring-alert">
-                <strong>⚠️ {{ expiringIngredients.length }} ingredient(s) expiring soon!</strong>
-                <ul style="margin: 8px 0 0 20px; padding: 0;">
-                    <li v-for="(item, index) in expiringIngredients" :key="item.id">
-                        {{ item.name }}
-                    </li>
-                </ul>
+                <div class="expiring-alert-icon">⚠️</div>
+                <div class="expiring-alert-content">
+                    <strong>{{ expiringIngredients.length }} ingredient(s) expiring soon!</strong>
+                    <ul>
+                        <li v-for="(item, index) in expiringIngredients" :key="item.id">
+                            {{ item.name }}
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
 
-        <!-- Filters Section -->
-        <div class="filters-section">
+        <!-- Empty State when no inventory -->
+        <div v-if="!initialising && !loading && inventory.length === 0" class="empty-state-container">
+            <div class="empty-state-card">
+                <!-- Illustration/Icon Section -->
+                <div class="empty-state-visual">
+                    <div class="empty-state-icon-wrapper">
+                        <span class="empty-state-icon-large">🥗</span>
+                    </div>
+                </div>
+            
+                <!-- Content Section -->
+                <div class="empty-state-content">
+                    <h2 class="empty-state-title">Your Recipe Journey Starts Here!</h2>
+                    <p class="empty-state-description">
+                        Add ingredients to your pantry and unlock personalised recipe suggestions 
+                        tailored to what you have on hand.
+                    </p>
+                    
+                    <!-- Feature Highlights -->
+                    <div class="empty-state-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">✨</span>
+                            <span class="feature-text">Smart Matching</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">⏰</span>
+                            <span class="feature-text">Use Expiring Items</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🌍</span>
+                            <span class="feature-text">Global Cuisines</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Call to Action -->
+                    <div class="empty-state-actions">
+                        <router-link to="/inventory" class="btn-empty-state btn-primary-empty">
+                            <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M12 5v14M5 12h14" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Add Your First Ingredient
+                        </router-link>
+                        <button class="btn-empty-state btn-secondary-empty" @click="showEmptyStateHelp">
+                            <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                                <path d="M12 16v-4M12 8h.01" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            How It Works
+                        </button>
+                    </div>
+                </div>
+            
+                <!-- Optional: Preview Cards -->
+                <div class="empty-state-preview">
+                    <p class="preview-label">What you'll get:</p>
+                    <div class="preview-cards">
+                        <div class="preview-card">
+                            <div class="preview-badge">80% Match</div>
+                            <div class="preview-image">🍝</div>
+                            <p class="preview-title">Recipe Suggestions</p>
+                        </div>
+                        <div class="preview-card">
+                            <div class="preview-badge">⏰ Alert</div>
+                            <div class="preview-image">📅</div>
+                            <p class="preview-title">Expiry Tracking</p>
+                        </div>
+                        <div class="preview-card">
+                            <div class="preview-badge">Smart Tips</div>
+                            <div class="preview-image">💡</div>
+                            <p class="preview-title">Reduce Waste</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Section (only show if inventory has items) -->
+        <div v-if="!initialising && inventory.length > 0" class="filters-section">
             <h3>Filter Recipes</h3>
             
             <div class="row g-3">
@@ -863,12 +981,18 @@ export default {
                         class="form-control" 
                         v-model="filters.searchQuery"
                         placeholder="e.g., Pasta, Chicken..."
+                        aria-label="Search recipes by name"
                     >
                 </div>
 
                 <div class="col-md-6">
                     <label class="form-label">Cuisine</label>
-                    <select class="form-select" v-model="filters.cuisine" @change="loadRecipes">
+                    <select 
+                        class="form-select" 
+                        v-model="filters.cuisine" 
+                        @change="loadRecipes"
+                        aria-label="Filter by cuisine"
+                    >
                         <option value="">All Cuisines</option>
                         <option v-for="cuisine in cuisines" :key="cuisine" :value="cuisine">
                             {{ cuisine }}
@@ -878,7 +1002,12 @@ export default {
 
                 <div class="col-md-6">
                     <label class="form-label">Dietary Preference</label>
-                    <select class="form-select" v-model="filters.dietaryPreference" @change="loadRecipes">
+                    <select 
+                        class="form-select" 
+                        v-model="filters.dietaryPreference" 
+                        @change="loadRecipes"
+                        aria-label="Filter by dietary preference"
+                    >
                         <option value="">All Types</option>
                         <option v-for="diet in dietaryOptions" :key="diet" :value="diet">
                             {{ diet }}
@@ -894,6 +1023,7 @@ export default {
                         v-model="filters.maxTime"
                         placeholder="e.g., 30"
                         min="0"
+                        aria-label="Maximum cooking time in minutes"
                     >
                 </div>
 
@@ -912,32 +1042,41 @@ export default {
                 </div>
             </div>
 
-            <div class="mt-3">
+            <div class="mt-3 filter-actions">
                 <button class="btn btn-secondary" @click="clearFilters">Clear Filters</button>
                 <button class="btn btn-primary ms-2" @click="loadRecipes">Refresh Recipes</button>
             </div>
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading" class="text-center my-5">
+        <div v-if="initialising || loading" class="text-center my-5">
             <RecipeLoadingSkeleton v-if="loading" :skeleton-count="6" />
         </div>
 
         <!-- Error State -->
-        <div v-if="error" class="alert alert-danger">
+        <div v-if="error" class="alert alert-danger" role="alert">
             {{ error }}
         </div>
 
-        <!-- Recipes Grid -->
-        <div v-if="!loading && !error" class="recipes-grid">
+        <!-- Recipes Grid (only show if inventory has items) -->
+        <div v-if="!initialising && !loading && !error && inventory.length > 0" class="recipes-grid">
             <div 
                 v-for="recipe in filteredRecipes" 
                 :key="recipe.idMeal"
                 class="recipe-card"
                 @click="showRecipeDetails(recipe)"
+                @keypress.enter="showRecipeDetails(recipe)"
+                role="button"
+                tabindex="0"
+                :aria-label="`View details for ${recipe.strMeal}`"
             >
                 <div class="recipe-image-container">
-                    <img :src="recipe.strMealThumb" :alt="recipe.strMeal" class="recipe-image">
+                    <img 
+                        :src="recipe.strMealThumb" 
+                        :alt="recipe.strMeal" 
+                        class="recipe-image"
+                        loading="lazy"
+                    >
                     
                     <div class="match-badge" :class="getMatchClass(recipe.matchPercentage)">
                         {{ recipe.matchPercentage }}% Match
@@ -980,16 +1119,30 @@ export default {
             </div>
 
             <!-- No Results -->
-            <div v-if="filteredRecipes.length === 0" class="col-12 text-center my-5">
+            <div v-if="filteredRecipes.length === 0" class="col-12 text-center my-5 no-results">
+                <div class="no-results-icon">🔍</div>
                 <p class="text-muted">No recipes found matching your criteria.</p>
                 <button class="btn btn-primary" @click="clearFilters">Clear Filters</button>
             </div>
         </div>
 
         <!-- RECIPE DETAIL MODAL -->
-        <div v-if="selectedRecipe" class="recipe-modal" @click.self="closeRecipeModal">
+        <div 
+            v-if="selectedRecipe" 
+            class="recipe-modal" 
+            @click.self="closeRecipeModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recipe-modal-title"
+        >
             <div class="recipe-modal-content recipe-detail-modal-styled">
-                <button class="btn-close-modal" @click="closeRecipeModal">&times;</button>
+                <button 
+                    class="btn-close-modal" 
+                    @click="closeRecipeModal"
+                    aria-label="Close recipe details"
+                >
+                    &times;
+                </button>
                 
                 <div class="recipe-detail-layout-styled">
                     <!-- Left Side: Recipe Image with Info Cards & buttons -->
@@ -1022,8 +1175,10 @@ export default {
                             <a v-if="selectedRecipe.strYoutube" 
                                :href="selectedRecipe.strYoutube" 
                                target="_blank" 
-                               class="btn btn-danger btn-sidebar">
-                                <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                               class="btn btn-danger btn-sidebar"
+                               rel="noopener noreferrer"
+                            >
+                                <svg class="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                                 </svg>
                                 Watch Video
@@ -1037,7 +1192,7 @@ export default {
                     <!-- Right Side: Ingredients & Instructions -->
                     <div class="recipe-detail-right">
                         <div class="recipe-title-section">
-                            <h2 class="recipe-modal-title">{{ selectedRecipe.strMeal }}</h2>
+                            <h2 class="recipe-modal-title" id="recipe-modal-title">{{ selectedRecipe.strMeal }}</h2>
                             <div class="recipe-modal-badges">
                                 <span class="badge bg-secondary">{{ selectedRecipe.strCategory }}</span>
                                 <span class="badge bg-info">{{ selectedRecipe.strArea }}</span>
@@ -1057,7 +1212,7 @@ export default {
                                         'ingredient-missing-styled': !ingredient.isAvailable
                                     }"
                                 >
-                                    <span class="ingredient-check-icon">
+                                    <span class="ingredient-check-icon" aria-hidden="true">
                                         <span v-if="ingredient.isExpiring" class="icon-container">
                                             <span class="check-icon">✓</span>
                                             <span class="fire-icon">🔥</span>
@@ -1083,22 +1238,39 @@ export default {
         </div>
 
         <!-- Use Recipe Confirmation Modal -->
-        <div v-if="showUseRecipeConfirmation" class="recipe-modal" @click.self="cancelUseRecipe">
+        <div 
+            v-if="showUseRecipeConfirmation" 
+            class="recipe-modal" 
+            @click.self="cancelUseRecipe"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-modal-title"
+        >
             <div class="recipe-modal-content use-recipe-modal-new">
-                <button class="btn-close-modal" @click="cancelUseRecipe">&times;</button>
+                <button 
+                    class="btn-close-modal" 
+                    @click="cancelUseRecipe"
+                    aria-label="Cancel and close"
+                >
+                    &times;
+                </button>
                 
                 <div v-if="recipeToUse" class="recipe-confirmation-layout-new">
                     <!-- Header Section -->
                     <div class="confirmation-header-new">
                         <div class="confirmation-image-left">
-                            <img :src="recipeToUse.strMealThumb" :alt="recipeToUse.strMeal" class="confirmation-recipe-image-redesign">
+                            <img 
+                                :src="recipeToUse.strMealThumb" 
+                                :alt="recipeToUse.strMeal" 
+                                class="confirmation-recipe-image-redesign"
+                            >
                         </div>
                         <div class="confirmation-info-right">
                             <div class="confirmation-badges-top">
                                 <span class="badge bg-secondary">{{ recipeToUse.strCategory }}</span>
                                 <span class="badge bg-info">{{ recipeToUse.strArea }}</span>
                             </div>
-                            <h2 class="confirmation-recipe-name-new">{{ recipeToUse.strMeal }}</h2>
+                            <h2 class="confirmation-recipe-name-new" id="confirm-modal-title">{{ recipeToUse.strMeal }}</h2>
                             <div class="confirmation-stats">
                                 <div class="stat-item">
                                     <div class="stat-value" :class="getMatchClass(recipeToUse.matchPercentage)">
@@ -1150,19 +1322,20 @@ export default {
                                             :disabled="!ingredient.available"
                                             :id="'ingredient-' + index"
                                             class="custom-checkbox"
+                                            :aria-label="`Use ${ingredient.name}`"
                                         >
                                         <label :for="'ingredient-' + index" class="checkbox-label"></label>
                                     </div>
                                     
                                     <!-- Status Indicator -->
                                     <div class="ingredient-status-indicator">
-                                        <span v-if="ingredient.isExpiring" class="status-badge badge-expiring">
+                                        <span v-if="ingredient.isExpiring" class="status-badge badge-expiring" aria-label="Expiring soon">
                                             <span class="icon">⏰</span>
                                         </span>
-                                        <span v-else-if="ingredient.available" class="status-badge badge-available">
+                                        <span v-else-if="ingredient.available" class="status-badge badge-available" aria-label="Available">
                                             <span class="icon">✓</span>
                                         </span>
-                                        <span v-else class="status-badge badge-missing">
+                                        <span v-else class="status-badge badge-missing" aria-label="Not available">
                                             <span class="icon">✗</span>
                                         </span>
                                     </div>
@@ -1182,11 +1355,14 @@ export default {
                                             class="quantity-input-redesign"
                                             step="0.01"
                                             min="0"
+                                            :aria-label="`Quantity of ${ingredient.name} to use`"
                                         >
                                         <span class="quantity-unit-redesign">{{ ingredient.inventoryUnit }}</span>
                                         <span v-if="ingredient.unitMatch === 'mismatch'" 
                                               class="unit-warning" 
-                                              title="Unit mismatch - please verify">
+                                              title="Unit mismatch - please verify"
+                                              role="img"
+                                              aria-label="Warning: unit mismatch">
                                             ⚠️
                                         </span>
                                     </div>
@@ -1210,7 +1386,7 @@ export default {
                             :disabled="usingRecipe || ingredientsToDeduct.filter(i => i.checked).length === 0"
                         >
                             <span v-if="usingRecipe">
-                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                                 Processing...
                             </span>
                             <span v-else>
@@ -1223,22 +1399,232 @@ export default {
             </div>
         </div>
 
-        <!-- Undo Notification Toast -->
-        <div v-if="showUndoNotification" class="undo-toast">
-            <div class="undo-toast-content">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>✓ Recipe Used Successfully!</strong>
-                        <p class="mb-0 mt-1" v-if="lastDeduction">
-                            <small>{{ lastDeduction.recipeName }} - Ingredients deducted</small>
-                        </p>
+        <!-- HOW IT WORKS MODAL -->
+        <div 
+            v-if="showHowItWorksModal" 
+            class="recipe-modal" 
+            @click.self="closeHowItWorksModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="how-it-works-title"
+        >
+            <div class="recipe-modal-content how-it-works-modal">
+                <button 
+                    class="btn-close-modal" 
+                    @click="closeHowItWorksModal"
+                    aria-label="Close how it works guide"
+                >
+                    &times;
+                </button>
+                
+                <div class="how-it-works-content">
+                    <!-- Header -->
+                    <div class="how-it-works-header">
+                        <div class="how-it-works-icon-badge">
+                            <span class="badge-icon">✨</span>
+                        </div>
+                        <h2 id="how-it-works-title" class="how-it-works-title">How Recipe Suggestions Work</h2>
+                        <p class="how-it-works-subtitle">Get personalised recipes based on your pantry</p>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-warning btn-sm" @click="undoRecipeUse">
-                            ↶ Undo
+                    
+                    <!-- Steps -->
+                    <div class="how-it-works-steps">
+                        <div class="step-card">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-icon">🥬</div>
+                                <h3 class="step-title">Add Your Ingredients</h3>
+                                <p class="step-description">
+                                    Start by adding ingredients from your pantry to your inventory. 
+                                    Include expiry dates to track freshness.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="step-arrow">→</div>
+                        
+                        <div class="step-card">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-icon">🔍</div>
+                                <h3 class="step-title">Smart Matching</h3>
+                                <p class="step-description">
+                                    Our system analyses your inventory and finds recipes that match 
+                                    your available ingredients.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="step-arrow">→</div>
+                        
+                        <div class="step-card">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-icon">⏰</div>
+                                <h3 class="step-title">Prioritise Expiring Items</h3>
+                                <p class="step-description">
+                                    Recipes using ingredients expiring soon are highlighted, 
+                                    helping you reduce food waste.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="step-arrow">→</div>
+                        
+                        <div class="step-card">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-icon">🍳</div>
+                                <h3 class="step-title">Cook & Track</h3>
+                                <p class="step-description">
+                                    Select a recipe to cook, and we'll automatically deduct 
+                                    used ingredients from your inventory.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Features -->
+                    <div class="how-it-works-features">
+                        <h3 class="features-title">What You Get:</h3>
+                        <div class="features-grid">
+                            <div class="feature-box">
+                                <span class="feature-box-icon">📊</span>
+                                <span class="feature-box-text">Match percentage for each recipe</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">🌍</span>
+                                <span class="feature-box-text">Recipes from global cuisines</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">🎯</span>
+                                <span class="feature-box-text">Filter by cuisine & dietary needs</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">📹</span>
+                                <span class="feature-box-text">Video tutorials included</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">♻️</span>
+                                <span class="feature-box-text">Reduce food waste</span>
+                            </div>
+                            <div class="feature-box">
+                                <span class="feature-box-icon">💡</span>
+                                <span class="feature-box-text">See missing ingredients</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Call to Action -->
+                    <div class="how-it-works-footer">
+                        <router-link to="/inventory" class="btn-modal-cta" @click="closeHowItWorksModal">
+                            <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M12 5v14M5 12h14" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Start Adding Ingredients
+                        </router-link>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUCCESS NOTIFICATION (TOP CENTER) -->
+        <transition name="slide-down">
+            <div 
+                v-if="showSuccessNotification" 
+                class="success-notification-top"
+                role="alert"
+                aria-live="polite"
+                aria-atomic="true"
+            >
+                <div class="success-notification-card">
+                    <div class="success-notification-content">
+                        <div class="success-icon-wrapper">
+                            <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <polyline points="22 4 12 14.01 9 11.01" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <p class="success-message-text">{{ successMessage }}</p>
+                        <button 
+                            class="success-dismiss-btn" 
+                            @click="dismissSuccessNotification"
+                            aria-label="Dismiss notification"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <line x1="18" y1="6" x2="6" y2="18" stroke-width="2" stroke-linecap="round"/>
+                                <line x1="6" y1="6" x2="18" y2="18" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
                         </button>
-                        <button class="btn btn-sm btn-outline-light" @click="dismissUndo">
-                            ✕
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- IMPROVED UNDO NOTIFICATION TOAST -->
+        <div 
+            v-if="showUndoNotification" 
+            class="undo-toast-improved"
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+        >
+            <div class="undo-toast-card">
+                <!-- Progress Bar -->
+                <div class="undo-progress-bar">
+                    <div 
+                        class="undo-progress-fill" 
+                        :style="{ width: undoProgressWidth + '%' }"
+                    ></div>
+                </div>
+                
+                <!-- Content -->
+                <div class="undo-content-wrapper">
+                    <!-- Icon and Message -->
+                    <div class="undo-message-section">
+                        <div class="undo-icon-circle">
+                            <svg class="checkmark-icon" viewBox="0 0 52 52" aria-hidden="true">
+                                <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                                <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                            </svg>
+                        </div>
+                        <div class="undo-text-content">
+                            <h4 class="undo-title">Recipe Used Successfully!</h4>
+                            <p class="undo-subtitle" v-if="lastDeduction">
+                                {{ lastDeduction.recipeName }}
+                            </p>
+                            <p class="undo-timer">
+                                <svg class="clock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                Undo available for {{ undoTimeRemaining }}s
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="undo-actions-section">
+                        <button 
+                            class="undo-btn undo-btn-primary" 
+                            @click="undoRecipeUse"
+                            aria-label="Undo recipe use"
+                        >
+                            <svg class="undo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <path d="M3 7v6h6"></path>
+                                <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"></path>
+                            </svg>
+                            Undo Recipe Use
+                        </button>
+                        <button 
+                            class="undo-btn undo-btn-dismiss" 
+                            @click="dismissUndo"
+                            aria-label="Dismiss notification"
+                        >
+                            <svg class="close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
                         </button>
                     </div>
                 </div>
@@ -1248,6 +1634,7 @@ export default {
 </template>
 
 <style>
+/* ===== BASE STYLES ===== */
 .recipes-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -1259,27 +1646,78 @@ export default {
     margin-bottom: 30px;
 }
 
+.recipes-header h1 {
+    font-size: 2.5em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
 .subtitle {
-    color: #666;
+    color: #6c757d;
     font-size: 1.1em;
 }
 
+/* ===== EXPIRING ALERT ===== */
 .expiring-alert {
-    background: #fff3cd;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffe8a1 100%);
     border: 2px solid #ffc107;
-    border-radius: 8px;
-    padding: 15px;
-    margin-top: 15px;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 20px;
     color: #856404;
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
 }
 
+.expiring-alert-icon {
+    font-size: 2em;
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.expiring-alert-content {
+    flex: 1;
+}
+
+.expiring-alert ul {
+    margin: 10px 0 0 0;
+    padding-left: 20px;
+}
+
+.expiring-alert li {
+    margin: 5px 0;
+}
+
+/* ===== FILTERS SECTION ===== */
 .filters-section {
     background: #f8f9fa;
-    padding: 20px;
-    border-radius: 10px;
+    padding: 25px;
+    border-radius: 12px;
     margin-bottom: 30px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
+.filters-section h3 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* ===== RECIPES GRID ===== */
 .recipes-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -1292,13 +1730,18 @@ export default {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
     cursor: pointer;
 }
 
 .recipe-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+.recipe-card:focus {
+    outline: 3px solid #4CAF50;
+    outline-offset: 2px;
 }
 
 .recipe-image-container {
@@ -1311,35 +1754,43 @@ export default {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.recipe-card:hover .recipe-image {
+    transform: scale(1.05);
 }
 
 .match-badge {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    padding: 8px 12px;
+    top: 12px;
+    right: 12px;
+    padding: 8px 14px;
     border-radius: 20px;
     font-weight: bold;
     font-size: 0.9em;
     color: white;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
 .expiring-badge {
     position: absolute;
-    top: 45px;
-    right: 10px;
+    top: 50px;
+    right: 12px;
     background: #ff6b6b;
     color: white;
-    padding: 5px 10px;
+    padding: 6px 12px;
     border-radius: 15px;
     font-size: 0.75em;
     font-weight: 600;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
 }
 
-.match-badge.match-excellent { background: #28a745; }
-.match-badge.match-good { background: #17a2b8; }
-.match-badge.match-fair { background: #ffc107; }
-.match-badge.match-low { background: #dc3545; }
+.match-badge.match-excellent { background: rgba(40, 167, 69, 0.95); }
+.match-badge.match-good { background: rgba(23, 162, 184, 0.95); }
+.match-badge.match-fair { background: rgba(255, 193, 7, 0.95); }
+.match-badge.match-low { background: rgba(220, 53, 69, 0.95); }
 
 .recipe-content {
     padding: 20px;
@@ -1347,9 +1798,10 @@ export default {
 
 .recipe-title {
     font-size: 1.2em;
-    margin-bottom: 10px;
-    color: #333;
+    margin-bottom: 12px;
+    color: #2c3e50;
     min-height: 50px;
+    font-weight: 600;
 }
 
 .recipe-meta {
@@ -1366,17 +1818,28 @@ export default {
 
 .expiring-ingredients {
     background: #fff3cd;
-    padding: 8px;
+    padding: 10px;
     border-radius: 6px;
-    margin-top: 8px;
+    margin-top: 10px;
     color: #856404;
 }
 
 .missing-ingredients {
-    margin-top: 8px;
+    margin-top: 10px;
 }
 
-/* Modal Styles */
+/* ===== NO RESULTS ===== */
+.no-results {
+    padding: 60px 20px;
+}
+
+.no-results-icon {
+    font-size: 4em;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+/* ===== MODAL BASE STYLES ===== */
 .recipe-modal {
     position: fixed;
     top: 0;
@@ -1390,6 +1853,7 @@ export default {
     z-index: 1000;
     padding: 20px;
     overflow-y: auto;
+    backdrop-filter: blur(5px);
 }
 
 .recipe-modal-content {
@@ -1400,18 +1864,18 @@ export default {
     max-height: 90vh;
     overflow-y: auto;
     position: relative;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
     animation: modalSlideIn 0.3s ease-out;
 }
 
 @keyframes modalSlideIn {
     from {
         opacity: 0;
-        transform: translateY(-30px);
+        transform: translateY(-30px) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
@@ -1428,7 +1892,7 @@ export default {
     font-size: 24px;
     cursor: pointer;
     z-index: 10;
-    transition: background 0.3s, transform 0.2s;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1437,11 +1901,10 @@ export default {
 
 .btn-close-modal:hover {
     background: rgba(0, 0, 0, 0.8);
-    transform: scale(1.1);
+    transform: scale(1.1) rotate(90deg);
 }
 
-/* Recipe Modal Styles */
-
+/* ===== RECIPE DETAIL MODAL ===== */
 .recipe-detail-modal-styled {
     max-width: 1000px;
     padding: 0;
@@ -1449,7 +1912,6 @@ export default {
     overflow: hidden;
 }
 
-/* Override any Bootstrap or default button styles */
 .recipe-detail-left .btn-sidebar {
     max-width: none !important;
     flex-grow: 1 !important;
@@ -1461,7 +1923,6 @@ export default {
     min-height: 700px;
 }
 
-/* Left Side: Image, Cards, and Buttons */
 .recipe-detail-left {
     background: #f8f9fa;
     padding: 20px;
@@ -1477,8 +1938,6 @@ export default {
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .detail-recipe-image-styled {
@@ -1486,11 +1945,8 @@ export default {
     height: 250px;
     object-fit: cover;
     display: block;
-    margin: 0;
-    padding: 0;
 }
 
-/* Match Badge Card */
 .match-card {
     background: linear-gradient(135deg, #ff9a56 0%, #ff6a6a 100%);
     padding: 20px;
@@ -1498,29 +1954,18 @@ export default {
     color: white;
     text-align: center;
     box-shadow: 0 4px 12px rgba(255, 154, 86, 0.3);
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .match-card.match-excellent {
     background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
 }
 
 .match-card.match-good {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .match-card.match-fair {
     background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
-}
-
-.match-card.match-low {
-    background: linear-gradient(135deg, #ff9a56 0%, #ff6a6a 100%);
-    box-shadow: 0 4px 12px rgba(255, 154, 86, 0.3);
 }
 
 .match-percentage {
@@ -1536,7 +1981,6 @@ export default {
     opacity: 0.95;
 }
 
-/* Expiring Ingredients Card */
 .expiring-card {
     background: white;
     border: 2px solid #ff6b6b;
@@ -1545,9 +1989,6 @@ export default {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .expiring-icon {
@@ -1557,7 +1998,6 @@ export default {
 
 .expiring-text {
     flex: 1;
-    min-width: 0;
 }
 
 .expiring-text strong {
@@ -1572,19 +2012,12 @@ export default {
     font-size: 0.9em;
     margin: 0;
     line-height: 1.4;
-    word-wrap: break-word;
 }
 
-/* Left Sidebar Action Buttons (watch + use) */
 .recipe-modal-actions-sidebar {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    width: 100%;
-    align-items: stretch;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
 }
 
 .btn-sidebar {
@@ -1596,14 +2029,12 @@ export default {
     font-size: 0.95em;
     border: none;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     text-decoration: none;
-    box-sizing: border-box;
-    margin: 0;
 }
 
 .btn-sidebar.btn-danger {
@@ -1615,7 +2046,6 @@ export default {
     background: #c9221c;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
-    color: white;
 }
 
 .btn-sidebar.btn-success {
@@ -1635,7 +2065,6 @@ export default {
     flex-shrink: 0;
 }
 
-/* Right Side: Content */
 .recipe-detail-right {
     background: white;
     display: flex;
@@ -1668,7 +2097,6 @@ export default {
     min-height: 450px;
 }
 
-/* Custom Scrollbar for recipe content */
 .recipe-scrollable-content::-webkit-scrollbar {
     width: 8px;
 }
@@ -1694,7 +2122,6 @@ export default {
     margin: 0 0 15px 0;
 }
 
-/* Ingredients List Styled */
 .ingredients-list-styled {
     list-style: none;
     padding: 0;
@@ -1709,7 +2136,7 @@ export default {
     margin: 6px 0;
     border-radius: 8px;
     font-size: 0.95em;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
 .ingredient-available-styled {
@@ -1746,14 +2173,6 @@ export default {
     gap: 3px;
 }
 
-.check-icon {
-    font-size: 1em;
-}
-
-.fire-icon {
-    font-size: 0.95em;
-}
-
 .ingredient-available-styled .ingredient-check-icon {
     color: #28a745;
 }
@@ -1771,7 +2190,6 @@ export default {
     color: #2c3e50;
 }
 
-/* Instructions Styled */
 .instructions-styled {
     background: #f8f9fa;
     padding: 20px;
@@ -1780,31 +2198,9 @@ export default {
     color: #555;
     white-space: pre-wrap;
     font-size: 0.95em;
-    margin-bottom: 0;
 }
 
-/* Responsive for styled modal */
-@media (max-width: 900px) {
-    .recipe-detail-layout-styled {
-        grid-template-columns: 1fr;
-    }
-    
-    .recipe-detail-left {
-        padding: 20px;
-    }
-    
-    .detail-recipe-image-styled {
-        height: 200px;
-    }
-    
-    .recipe-scrollable-content {
-        max-height: calc(100vh - 400px);
-        min-height: 300px;
-    }
-}
-
-/* ========== REDESIGNED CONFIRMATION MODAL STYLES ========== */
-
+/* ===== CONFIRMATION MODAL ===== */
 .use-recipe-modal-new {
     max-width: 850px;
     max-height: 90vh;
@@ -1819,11 +2215,9 @@ export default {
     display: flex;
     flex-direction: column;
     max-height: 90vh;
-    min-height: auto;
     overflow: hidden;
 }
 
-/* Header Section - Redesigned */
 .confirmation-header-new {
     display: grid;
     grid-template-columns: 200px 1fr;
@@ -1834,7 +2228,6 @@ export default {
     flex-shrink: 0;
 }
 
-/* Prevent any match-badge styles from bleeding into stats */
 .confirmation-header-new .stat-value {
     border-radius: 0;
 }
@@ -1886,7 +2279,6 @@ export default {
     justify-content: space-between;
     gap: 8px;
     min-width: 75px;
-    flex: 0 0 auto;
 }
 
 .stat-value {
@@ -1898,10 +2290,6 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    text-align: center;
-    background: transparent !important;
-    padding: 0;
-    border: none;
 }
 
 .stat-label {
@@ -1910,39 +2298,20 @@ export default {
     text-transform: uppercase;
     letter-spacing: 0.8px;
     font-weight: 600;
-    white-space: nowrap;
-    text-align: center;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .stat-divider {
     width: 1px;
-    height: 100%;
     background: #dee2e6;
     align-self: stretch;
-    margin: 0;
 }
 
-.stat-value.match-excellent { 
-    color: #28a745;
-}
-.stat-value.match-good { 
-    color: #17a2b8;
-}
-.stat-value.match-fair { 
-    color: #ffc107;
-}
-.stat-value.match-low { 
-    color: #dc3545;
-}
-.stat-value.expiring-stat { 
-    color: #ff6b6b;
-}
+.stat-value.match-excellent { color: #28a745; }
+.stat-value.match-good { color: #17a2b8; }
+.stat-value.match-fair { color: #ffc107; }
+.stat-value.match-low { color: #dc3545; }
+.stat-value.expiring-stat { color: #ff6b6b; }
 
-/* Ingredients Section - Redesigned */
 .ingredients-section-redesign {
     padding: 30px;
     flex: 1;
@@ -1962,10 +2331,6 @@ export default {
 .ingredients-section-redesign::-webkit-scrollbar-thumb {
     background: #cbd5e0;
     border-radius: 10px;
-}
-
-.ingredients-section-redesign::-webkit-scrollbar-thumb:hover {
-    background: #a0aec0;
 }
 
 .section-title-redesign {
@@ -1991,10 +2356,8 @@ export default {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding-right: 8px;
 }
 
-/* Ingredient Card - Redesigned */
 .ingredient-card-redesign {
     background: white;
     border: 2px solid #e9ecef;
@@ -2032,7 +2395,6 @@ export default {
     gap: 14px;
 }
 
-/* Custom Checkbox */
 .ingredient-checkbox-wrapper {
     position: relative;
     flex-shrink: 0;
@@ -2051,7 +2413,7 @@ export default {
     border: 2px solid #cbd5e0;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     position: relative;
 }
 
@@ -2077,7 +2439,11 @@ export default {
     cursor: not-allowed;
 }
 
-/* Status Indicator */
+.custom-checkbox:focus + .checkbox-label {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+}
+
 .ingredient-status-indicator {
     flex-shrink: 0;
 }
@@ -2107,7 +2473,6 @@ export default {
     color: #721c24;
 }
 
-/* Ingredient Info */
 .ingredient-info-wrapper {
     flex: 1;
     min-width: 0;
@@ -2125,7 +2490,6 @@ export default {
     color: #6c757d;
 }
 
-/* Quantity Editor */
 .ingredient-quantity-wrapper {
     display: flex;
     align-items: center;
@@ -2142,7 +2506,7 @@ export default {
     font-size: 0.95em;
     font-weight: 600;
     color: #2c3e50;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
 .quantity-input-redesign:focus {
@@ -2169,7 +2533,6 @@ export default {
     cursor: help;
 }
 
-/* Action Buttons*/
 .modal-actions-redesign {
     display: flex;
     gap: 12px;
@@ -2187,7 +2550,7 @@ export default {
     border-radius: 10px;
     border: none;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2210,6 +2573,11 @@ export default {
     border-color: #adb5bd;
 }
 
+.btn-cancel-redesign:focus {
+    outline: 2px solid #6c757d;
+    outline-offset: 2px;
+}
+
 .btn-confirm-redesign {
     background: #4CAF50;
     color: white;
@@ -2220,26 +2588,860 @@ export default {
     box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
 }
 
+.btn-confirm-redesign:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+}
+
 .btn-icon {
     font-size: 1.1em;
 }
 
-/* Responsive */
+/* ===== IMPROVED UNDO TOAST ===== */
+.undo-toast-improved {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 2000;
+    max-width: 450px;
+    width: calc(100% - 60px);
+    animation: slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.undo-toast-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    border: 1px solid #e9ecef;
+}
+
+/* Progress Bar */
+.undo-progress-bar {
+    height: 4px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+
+.undo-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4CAF50 0%, #66BB6A 100%);
+    transition: width 1s linear;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+/* Content */
+.undo-content-wrapper {
+    padding: 20px;
+}
+
+.undo-message-section {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.undo-icon-circle {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.checkmark-icon {
+    width: 28px;
+    height: 28px;
+    stroke-width: 3;
+}
+
+.checkmark-circle {
+    stroke: white;
+    stroke-width: 3;
+    stroke-dasharray: 166;
+    stroke-dashoffset: 166;
+    animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.checkmark-check {
+    stroke: white;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.6s forwards;
+}
+
+@keyframes stroke {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.undo-text-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.undo-title {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 4px 0;
+}
+
+.undo-subtitle {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin: 0 0 8px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.undo-timer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: #4CAF50;
+    font-weight: 600;
+    margin: 0;
+}
+
+.clock-icon {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+}
+
+/* Actions */
+.undo-actions-section {
+    display: flex;
+    gap: 10px;
+}
+
+.undo-btn {
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.undo-btn-primary {
+    flex: 1;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.undo-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.undo-btn-primary:active {
+    transform: translateY(0);
+}
+
+.undo-btn-primary:focus {
+    outline: 3px solid rgba(76, 175, 80, 0.5);
+    outline-offset: 2px;
+}
+
+.undo-icon {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+}
+
+.undo-btn-dismiss {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
+.undo-btn-dismiss:hover {
+    background: #e9ecef;
+    color: #2c3e50;
+}
+
+.undo-btn-dismiss:focus {
+    outline: 2px solid #6c757d;
+    outline-offset: 2px;
+}
+
+.close-icon {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+}
+
+/* ===== SUCCESS NOTIFICATION (TOP CENTER) ===== */
+.success-notification-top {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2001;
+    max-width: 500px;
+    width: calc(100% - 40px);
+}
+
+.success-notification-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    border-left: 4px solid #4CAF50;
+    overflow: hidden;
+}
+
+.success-notification-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+}
+
+.success-icon-wrapper {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.success-icon {
+    width: 24px;
+    height: 24px;
+    stroke: white;
+    stroke-width: 2.5;
+}
+
+.success-message-text {
+    flex: 1;
+    margin: 0;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #2c3e50;
+    line-height: 1.4;
+}
+
+.success-dismiss-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.success-dismiss-btn:hover {
+    background: #f5f5f5;
+}
+
+.success-dismiss-btn:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+}
+
+.success-dismiss-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: #6c757d;
+}
+
+/* Slide down animation */
+.slide-down-enter-active {
+    animation: slideDown 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.slide-down-leave-active {
+    animation: slideUp 0.3s ease-in;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateX(-50%) translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(-50%) translateY(-100%);
+        opacity: 0;
+    }
+}
+
+/* ===== ENHANCED EMPTY STATE ===== */
+.empty-state-container {
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.empty-state-card {
+    max-width: 800px;
+    width: 100%;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    padding: 50px 40px;
+    text-align: center;
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Visual Section */
+.empty-state-visual {
+    margin-bottom: 30px;
+    position: relative;
+    height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.empty-state-icon-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.empty-state-icon-large {
+    font-size: 120px;
+    display: block;
+    animation: float 3s ease-in-out infinite;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.1));
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+}
+
+@keyframes orbit {
+    0% {
+        transform: rotate(0deg) translateX(80px) rotate(0deg);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 1;
+    }
+    100% {
+        transform: rotate(360deg) translateX(80px) rotate(-360deg);
+        opacity: 0;
+    }
+}
+
+/* Content Section */
+.empty-state-content {
+    margin-bottom: 40px;
+}
+
+.empty-state-title {
+    font-size: 2.2em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 15px 0;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.empty-state-description {
+    font-size: 1.1em;
+    color: #6c757d;
+    line-height: 1.6;
+    max-width: 600px;
+    margin: 0 auto 30px;
+}
+
+/* Feature Highlights */
+.empty-state-features {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+    margin: 30px 0;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: #f8f9fa;
+    border-radius: 25px;
+    transition: all 0.3s ease;
+}
+
+.feature-item:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.feature-icon {
+    font-size: 1.5em;
+}
+
+.feature-text {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Call to Action Buttons */
+.empty-state-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 30px;
+}
+
+.btn-empty-state {
+    padding: 16px 32px;
+    border-radius: 12px;
+    font-size: 1.05em;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary-empty {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+}
+
+.btn-primary-empty:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.btn-secondary-empty {
+    background: white;
+    color: #4CAF50;
+    border: 2px solid #4CAF50;
+}
+
+.btn-secondary-empty:hover {
+    background: #f8f9fa;
+    transform: translateY(-2px);
+}
+
+.btn-icon-left {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+}
+
+/* Preview Section */
+.empty-state-preview {
+    margin-top: 50px;
+    padding-top: 40px;
+    border-top: 2px dashed #e9ecef;
+}
+
+.preview-label {
+    font-size: 0.9em;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.preview-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.preview-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    padding: 24px;
+    border-radius: 12px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.preview-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.preview-card:hover {
+    border-color: #4CAF50;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.preview-card:hover::before {
+    transform: scaleX(1);
+}
+
+.preview-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    background: #e9ecef;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 12px;
+}
+
+.preview-image {
+    font-size: 3em;
+    margin: 15px 0;
+}
+
+.preview-title {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+}
+
+/* ===== HOW IT WORKS MODAL ===== */
+.how-it-works-modal {
+    max-width: 900px;
+    padding: 0;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+.how-it-works-content {
+    padding: 40px;
+}
+
+/* Header */
+.how-it-works-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.how-it-works-icon-badge {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.badge-icon {
+    font-size: 2.5em;
+}
+
+.how-it-works-title {
+    font-size: 2em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 10px 0;
+}
+
+.how-it-works-subtitle {
+    font-size: 1.1em;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* Steps */
+.how-it-works-steps {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 40px;
+    overflow-x: auto;
+    padding: 20px 0;
+}
+
+.step-card {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 16px;
+    padding: 24px;
+    min-width: 180px;
+    flex: 1;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.step-card:hover {
+    border-color: #4CAF50;
+    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.15);
+    transform: translateY(-4px);
+}
+
+.step-number {
+    position: absolute;
+    top: -12px;
+    left: 20px;
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9em;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.step-content {
+    text-align: center;
+}
+
+.step-icon {
+    font-size: 2.5em;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.step-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 8px 0;
+}
+
+.step-description {
+    font-size: 0.9em;
+    color: #6c757d;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.step-arrow {
+    font-size: 2em;
+    color: #4CAF50;
+    flex-shrink: 0;
+    animation: arrowBounce 1.5s ease-in-out infinite;
+}
+
+@keyframes arrowBounce {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(5px); }
+}
+
+/* Features Section */
+.how-it-works-features {
+    background: #f8f9fa;
+    border-radius: 16px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.features-title {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 20px 0;
+    text-align: center;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.feature-box {
+    background: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.feature-box:hover {
+    border-color: #4CAF50;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.1);
+}
+
+.feature-box-icon {
+    font-size: 1.8em;
+    flex-shrink: 0;
+}
+
+.feature-box-text {
+    font-size: 0.95em;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* Footer */
+.how-it-works-footer {
+    text-align: center;
+}
+
+.btn-modal-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 32px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-modal-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.btn-modal-cta:focus {
+    outline: 3px solid rgba(76, 175, 80, 0.5);
+    outline-offset: 2px;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 1024px) {
+    .recipe-detail-layout-styled {
+        grid-template-columns: 1fr;
+    }
+    
+    .recipe-detail-left {
+        padding: 20px;
+    }
+    
+    .recipe-scrollable-content {
+        max-height: none;
+        min-height: auto;
+    }
+}
+
 @media (max-width: 768px) {
-    .use-recipe-modal-new {
-        max-height: 95vh;
+    .recipes-container {
+        padding: 15px;
+    }
+    
+    .recipes-header h1 {
+        font-size: 2em;
+    }
+    
+    .recipes-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .filters-section {
+        padding: 20px;
+    }
+    
+    .filter-actions {
+        flex-direction: column;
+    }
+    
+    .filter-actions button {
+        width: 100%;
     }
     
     .confirmation-header-new {
         grid-template-columns: 1fr;
-        text-align: center;
+        gap: 20px;
         padding: 20px;
+        text-align: center;
     }
     
     .confirmation-recipe-image-redesign {
-        height: 150px;
+        max-width: 250px;
         margin: 0 auto;
-        max-width: 200px;
     }
     
     .confirmation-stats {
@@ -2264,55 +3466,265 @@ export default {
         flex-direction: column;
         padding: 15px 20px;
     }
-}
-
-/* Undo Toast Notification */
-.undo-toast {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    z-index: 2000;
-    animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-    from {
-        transform: translateX(400px);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-.undo-toast-content {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    min-width: 350px;
-    max-width: 500px;
-}
-
-.undo-toast-content strong {
-    font-size: 1.1em;
-}
-
-.undo-toast-content small {
-    color: rgba(255, 255, 255, 0.9);
-}
-
-@media (max-width: 768px) {
-    .undo-toast {
+    
+    /* Undo toast mobile */
+    .undo-toast-improved {
         bottom: 20px;
         right: 20px;
         left: 20px;
+        max-width: none;
+        width: auto;
     }
     
-    .undo-toast-content {
-        min-width: auto;
+    .undo-message-section {
+        margin-bottom: 12px;
+    }
+    
+    .undo-actions-section {
+        flex-direction: column;
+    }
+    
+    .undo-btn-dismiss {
+        width: 100%;
+        height: 44px;
+    }
+
+    /* Success notification mobile */
+    .success-notification-top {
+        top: 10px;
+        width: calc(100% - 20px);
+    }
+    
+    .success-notification-content {
+        padding: 14px 16px;
+    }
+    
+    .success-message-text {
+        font-size: 0.9em;
+    }
+
+    /* Empty state responsive */
+    .empty-state-card {
+        padding: 40px 25px;
+    }
+    
+    .empty-state-title {
+        font-size: 1.8em;
+    }
+    
+    .empty-state-description {
+        font-size: 1em;
+    }
+    
+    .empty-state-icon-large {
+        font-size: 90px;
+    }
+    
+    .empty-state-features {
+        gap: 15px;
+    }
+    
+    .feature-item {
+        padding: 10px 16px;
+    }
+    
+    .empty-state-actions {
+        flex-direction: column;
+    }
+    
+    .btn-empty-state {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .preview-cards {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    /* How it works modal responsive */
+    .how-it-works-content {
+        padding: 30px 20px;
+    }
+    
+    .how-it-works-title {
+        font-size: 1.6em;
+    }
+    
+    .how-it-works-steps {
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .step-arrow {
+        transform: rotate(90deg);
+        margin: -10px 0;
+    }
+    
+    @keyframes arrowBounce {
+        0%, 100% { transform: rotate(90deg) translateX(0); }
+        50% { transform: rotate(90deg) translateX(5px); }
+    }
+    
+    .step-card {
+        min-width: 100%;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .recipes-header h1 {
+        font-size: 1.75em;
+    }
+    
+    .expiring-alert {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .recipe-content {
+        padding: 15px;
+    }
+    
+    .recipe-title {
+        font-size: 1.1em;
+        min-height: auto;
+    }
+    
+    .btn-close-modal {
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+    }
+    
+    .recipe-modal {
+        padding: 10px;
+    }
+    
+    .undo-content-wrapper {
+        padding: 16px;
+    }
+    
+    .undo-title {
+        font-size: 1em;
+    }
+    
+    .undo-btn-primary {
+        font-size: 0.9em;
+        padding: 10px 16px;
+    }
+
+    /* Empty state mobile */
+    .empty-state-container {
+        padding: 20px 15px;
+    }
+    
+    .empty-state-card {
+        padding: 30px 20px;
+    }
+    
+    .empty-state-title {
+        font-size: 1.5em;
+    }
+    
+    .empty-state-visual {
+        height: 140px;
+    }
+    
+    .empty-state-icon-large {
+        font-size: 70px;
+    }
+    
+    @keyframes orbit {
+        0%, 100% {
+            transform: rotate(0deg) translateX(60px) rotate(0deg);
+            opacity: 0;
+        }
+        10%, 90% {
+            opacity: 1;
+        }
+    }
+
+    /* How it works modal mobile */
+    .how-it-works-content {
+        padding: 25px 15px;
+    }
+    
+    .how-it-works-icon-badge {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .badge-icon {
+        font-size: 2em;
+    }
+    
+    .how-it-works-title {
+        font-size: 1.4em;
+    }
+    
+    .step-icon {
+        font-size: 2em;
+    }
+    
+    .btn-modal-cta {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Focus visible for keyboard navigation */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 3px solid #4CAF50;
+    outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .recipe-card {
+        border: 2px solid currentColor;
+    }
+    
+    .btn-sidebar,
+    .undo-btn {
+        border: 2px solid currentColor;
+    }
+}
+
+/* Focus States for Accessibility */
+.btn-empty-state:focus-visible {
+    outline: 3px solid #4CAF50;
+    outline-offset: 3px;
+}
+
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .empty-state-icon-large,
+    .empty-state-card,
+    .how-it-works-icon-badge,
+    .step-arrow {
+        animation: none !important;
+    }
+    
+    .preview-card::before {
+        transition: none;
     }
 }
 </style>
