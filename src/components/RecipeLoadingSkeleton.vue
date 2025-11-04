@@ -69,7 +69,7 @@
       <p class="loading-text">{{ currentMessage }}</p>
     </div>
 
-    <!-- Skeleton cards remain the same -->
+    <!-- Skeleton cards -->
     <div class="skeleton-grid">
       <div 
         v-for="n in skeletonCount" 
@@ -231,7 +231,7 @@ export default {
   }
 }
 
-/* Skeleton styles remain the same */
+/* Skeleton Grid */
 .skeleton-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -249,21 +249,37 @@ export default {
 }
 
 @keyframes skeletonPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Shimmer animation for skeleton elements */
+@keyframes shimmer {
+  0% {
+    background-position: -400% 0;
+  }
+  100% {
+    background-position: 400% 0;
+  }
 }
 
 .skeleton-image {
   width: 100%;
   height: 180px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  background: linear-gradient(
+    90deg,
+    #d0d0d0 0%,
+    #e8e8e8 25%,
+    #ffffff 50%,
+    #e8e8e8 75%,
+    #d0d0d0 100%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 2s linear infinite;
 }
 
 .skeleton-content {
@@ -275,18 +291,32 @@ export default {
 
 .skeleton-title {
   height: 24px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
+  background: linear-gradient(
+    90deg,
+    #d0d0d0 0%,
+    #e8e8e8 25%,
+    #ffffff 50%,
+    #e8e8e8 75%,
+    #d0d0d0 100%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 2s linear infinite;
   border-radius: 4px;
   width: 70%;
 }
 
 .skeleton-line {
   height: 14px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
+  background: linear-gradient(
+    90deg,
+    #d0d0d0 0%,
+    #e8e8e8 25%,
+    #ffffff 50%,
+    #e8e8e8 75%,
+    #d0d0d0 100%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 2s linear infinite;
   border-radius: 4px;
   width: 100%;
 }
@@ -304,12 +334,20 @@ export default {
 .skeleton-badge {
   height: 24px;
   width: 80px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
+  background: linear-gradient(
+    90deg,
+    #d0d0d0 0%,
+    #e8e8e8 25%,
+    #ffffff 50%,
+    #e8e8e8 75%,
+    #d0d0d0 100%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 2s linear infinite;
   border-radius: 12px;
 }
 
+/* Responsive adjustments */
 @media (max-width: 768px) {
   .skeleton-grid {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
