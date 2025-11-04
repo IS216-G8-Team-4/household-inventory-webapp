@@ -359,6 +359,7 @@
                       Edit
                     </button>
                     <button 
+                      v-if="timeUntilExpiry(batch.expiryDate) !== 'Expired'"
                       class="btn btn-outline-warning btn-sm"
                       @click="goToDonate(item, batch)"
                     >
