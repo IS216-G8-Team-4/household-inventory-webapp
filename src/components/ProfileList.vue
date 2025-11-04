@@ -240,7 +240,7 @@ export default {
                       
                       <div class="profile-details d-flex flex-column">
                         <div class="detail-item d-flex align-items-start">
-                          <span class="detail-text">Allegies: {{ formatList(p.food_allergens) }}</span>
+                          <span class="detail-text">Allergies: {{ formatList(p.food_allergens) }}</span>
                         </div>
                         
                         <div class="detail-item d-flex align-items-start"> 
