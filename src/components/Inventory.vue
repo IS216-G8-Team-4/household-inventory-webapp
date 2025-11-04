@@ -46,6 +46,21 @@
       list = list.filter(item => selectedCategories.value.includes(item.category))
     }
 
+    // APPLY BATCH SORTING FOR EACH INGREDIENT
+    list.forEach(ingredient => {
+      // Sort the batches array for the current ingredient by expiryDate
+      ingredient.batches.sort((a, b) => {
+        const dateA = new Date(a.expiryDate)
+        const dateB = new Date(b.expiryDate)
+        
+        // Handle null/empty dates by putting them at the end
+        if (!a.expiryDate) return 1
+        if (!b.expiryDate) return -1
+        
+        return dateA - dateB // Ascending sort (earliest date first)
+      })
+    })
+
     // Apply sorting
     if (sortBy.value === 'alphabetical') {
       list.sort((a, b) => a.name.localeCompare(b.name))
