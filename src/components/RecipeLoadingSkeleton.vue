@@ -1,10 +1,9 @@
 <template>
   <div class="recipe-loading-container">
-    <!-- Animated Cooking Pot with Steam -->
     <div class="cooking-animation">
-      <svg viewBox="0 0 200 200" class="cooking-pot-svg">
+      <svg viewBox="0 0 200 200" class="cooking-pot-svg" style="overflow: visible;">
         <!-- Steam particles -->
-        <g class="steam">
+        <g class="steam-group">
           <path 
             class="steam-particle steam-1" 
             d="M80,60 Q75,45 70,30" 
@@ -12,7 +11,6 @@
             stroke="#a8d5ba" 
             stroke-width="3" 
             stroke-linecap="round"
-            opacity="0"
           />
           <path 
             class="steam-particle steam-2" 
@@ -21,7 +19,6 @@
             stroke="#a8d5ba" 
             stroke-width="3.5" 
             stroke-linecap="round"
-            opacity="0"
           />
           <path 
             class="steam-particle steam-3" 
@@ -30,7 +27,6 @@
             stroke="#a8d5ba" 
             stroke-width="3" 
             stroke-linecap="round"
-            opacity="0"
           />
         </g>
         
@@ -66,14 +62,14 @@
           />
         </g>
         
-        <!-- Pot details/shine -->
+        <!-- Pot shine -->
         <ellipse cx="85" cy="100" rx="8" ry="15" fill="#7ab889" opacity="0.3" />
       </svg>
       
       <p class="loading-text">{{ currentMessage }}</p>
     </div>
 
-    <!-- Skeleton Recipe Cards -->
+    <!-- Skeleton cards remain the same -->
     <div class="skeleton-grid">
       <div 
         v-for="n in skeletonCount" 
@@ -114,11 +110,22 @@ export default {
         'Checking pantry items...',
         'Preparing suggestions...'
       ],
-      messageIndex: 0
+      messageIndex: 0,
+      messageInterval: null
     }
   },
   mounted() {
     this.rotateMessages();
+    // Force animation restart
+    this.$nextTick(() => {
+      const svg = this.$el.querySelector('.cooking-pot-svg');
+      if (svg) {
+        svg.style.animation = 'none';
+        setTimeout(() => {
+          svg.style.animation = '';
+        }, 10);
+      }
+    });
   },
   beforeUnmount() {
     if (this.messageInterval) {
@@ -136,7 +143,54 @@ export default {
 }
 </script>
 
+<style>
+/* UNSCOPED animations - critical for SVG */
+@keyframes lidBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes steamRise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(1);
+  }
+  20% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.6;
+    transform: translateY(-25px) scale(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50px) scale(1.6);
+  }
+}
+
+.pot-lid {
+  animation: lidBounce 1.5s ease-in-out infinite !important;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.steam-particle {
+  animation: steamRise 3s ease-in-out infinite !important;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.steam-1 { animation-delay: 0s !important; }
+.steam-2 { animation-delay: 0.6s !important; }
+.steam-3 { animation-delay: 1.2s !important; }
+</style>
+
 <style scoped>
+/* Rest of scoped styles */
 .recipe-loading-container {
   width: 100%;
   padding: 2rem;
@@ -146,7 +200,6 @@ export default {
   gap: 3rem;
 }
 
-/* Cooking Animation */
 .cooking-animation {
   display: flex;
   flex-direction: column;
@@ -159,57 +212,6 @@ export default {
   height: 150px;
 }
 
-/* Pot lid animation - subtle bounce */
-.pot-lid {
-  animation: lidBounce 1.5s ease-in-out infinite;
-  transform-origin: center;
-}
-
-@keyframes lidBounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-}
-
-/* Steam animations */
-.steam-particle {
-  animation: steamRise 3s ease-in-out infinite;
-}
-
-.steam-1 {
-  animation-delay: 0s;
-}
-
-.steam-2 {
-  animation-delay: 0.6s;
-}
-
-.steam-3 {
-  animation-delay: 1.2s;
-}
-
-@keyframes steamRise {
-  0% {
-    opacity: 0;
-    transform: translateY(0) scale(1);
-  }
-  20% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 0.5;
-    transform: translateY(-20px) scale(1.2);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-40px) scale(1.5);
-  }
-}
-
-/* Loading text */
 .loading-text {
   font-size: 1.1rem;
   color: #5a9168;
@@ -229,7 +231,7 @@ export default {
   }
 }
 
-/* Skeleton Grid */
+/* Skeleton styles remain the same */
 .skeleton-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -247,34 +249,21 @@ export default {
 }
 
 @keyframes skeletonPulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .skeleton-image {
   width: 100%;
   height: 180px;
-  background: linear-gradient(
-    90deg,
-    #f0f0f0 25%,
-    #e0e0e0 50%,
-    #f0f0f0 75%
-  );
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
 }
 
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 .skeleton-content {
@@ -286,12 +275,7 @@ export default {
 
 .skeleton-title {
   height: 24px;
-  background: linear-gradient(
-    90deg,
-    #f0f0f0 25%,
-    #e0e0e0 50%,
-    #f0f0f0 75%
-  );
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
   border-radius: 4px;
@@ -300,12 +284,7 @@ export default {
 
 .skeleton-line {
   height: 14px;
-  background: linear-gradient(
-    90deg,
-    #f0f0f0 25%,
-    #e0e0e0 50%,
-    #f0f0f0 75%
-  );
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
   border-radius: 4px;
@@ -325,18 +304,12 @@ export default {
 .skeleton-badge {
   height: 24px;
   width: 80px;
-  background: linear-gradient(
-    90deg,
-    #f0f0f0 25%,
-    #e0e0e0 50%,
-    #f0f0f0 75%
-  );
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
   border-radius: 12px;
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .skeleton-grid {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));

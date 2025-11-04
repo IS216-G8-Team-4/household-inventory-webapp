@@ -41,7 +41,11 @@ export default {
             showUndoNotification: false,
             undoTimer: null,
             lastDeduction: null,
-            undoTimeRemaining: 15
+            undoTimeRemaining: 15,
+            
+            showSuccessNotification: false,
+            successMessage: '',
+            successTimer: null
         }
     },
 
@@ -596,7 +600,7 @@ export default {
                 
             } catch (error) {
                 console.error('Error using recipe:', error)
-                alert('Failed to use recipe. Please try again.')
+                this.showSuccessMessage('Failed to use recipe. Please try again.', 'error')
             } finally {
                 this.usingRecipe = false
             }
@@ -746,11 +750,11 @@ export default {
                     this.undoTimer = null
                 }
                 
-                alert('Recipe use has been undone successfully!')
+                this.showSuccessMessage('Recipe use has been undone successfully!')
                 
             } catch (error) {
                 console.error('Error undoing recipe use:', error)
-                alert('Failed to undo. Please check your inventory manually.')
+                this.showSuccessMessage('Failed to undo. Please check your inventory manually.', 'error')
             }
         },
         
@@ -760,6 +764,27 @@ export default {
             if (this.undoTimer) {
                 clearTimeout(this.undoTimer)
                 this.undoTimer = null
+            }
+        },
+        
+        showSuccessMessage(message, type = 'success') {
+            this.successMessage = message
+            this.showSuccessNotification = true
+            
+            if (this.successTimer) {
+                clearTimeout(this.successTimer)
+            }
+            
+            this.successTimer = setTimeout(() => {
+                this.showSuccessNotification = false
+            }, 4000)
+        },
+        
+        dismissSuccessNotification() {
+            this.showSuccessNotification = false
+            if (this.successTimer) {
+                clearTimeout(this.successTimer)
+                this.successTimer = null
             }
         },
         
@@ -841,6 +866,9 @@ export default {
         if (this.undoTimer) {
             clearTimeout(this.undoTimer)
         }
+        if (this.successTimer) {
+            clearTimeout(this.successTimer)
+        }
     }
 }
 </script>
@@ -872,9 +900,6 @@ export default {
                 <div class="empty-state-visual">
                     <div class="empty-state-icon-wrapper">
                         <span class="empty-state-icon-large">🥗</span>
-                        <span class="empty-state-icon-accent">🍅</span>
-                        <span class="empty-state-icon-accent">🥕</span>
-                        <span class="empty-state-icon-accent">🧀</span>
                     </div>
                 </div>
             
@@ -1502,6 +1527,39 @@ export default {
                 </div>
             </div>
         </div>
+
+        <!-- SUCCESS NOTIFICATION (TOP CENTER) -->
+        <transition name="slide-down">
+            <div 
+                v-if="showSuccessNotification" 
+                class="success-notification-top"
+                role="alert"
+                aria-live="polite"
+                aria-atomic="true"
+            >
+                <div class="success-notification-card">
+                    <div class="success-notification-content">
+                        <div class="success-icon-wrapper">
+                            <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <polyline points="22 4 12 14.01 9 11.01" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <p class="success-message-text">{{ successMessage }}</p>
+                        <button 
+                            class="success-dismiss-btn" 
+                            @click="dismissSuccessNotification"
+                            aria-label="Dismiss notification"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <line x1="18" y1="6" x2="6" y2="18" stroke-width="2" stroke-linecap="round"/>
+                                <line x1="6" y1="6" x2="18" y2="18" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
 
         <!-- IMPROVED UNDO NOTIFICATION TOAST -->
         <div 
@@ -2745,6 +2803,120 @@ export default {
     stroke-width: 2.5;
 }
 
+/* ===== SUCCESS NOTIFICATION (TOP CENTER) ===== */
+.success-notification-top {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2001;
+    max-width: 500px;
+    width: calc(100% - 40px);
+}
+
+.success-notification-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    border-left: 4px solid #4CAF50;
+    overflow: hidden;
+}
+
+.success-notification-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+}
+
+.success-icon-wrapper {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.success-icon {
+    width: 24px;
+    height: 24px;
+    stroke: white;
+    stroke-width: 2.5;
+}
+
+.success-message-text {
+    flex: 1;
+    margin: 0;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #2c3e50;
+    line-height: 1.4;
+}
+
+.success-dismiss-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.success-dismiss-btn:hover {
+    background: #f5f5f5;
+}
+
+.success-dismiss-btn:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+}
+
+.success-dismiss-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: #6c757d;
+}
+
+/* Slide down animation */
+.slide-down-enter-active {
+    animation: slideDown 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.slide-down-leave-active {
+    animation: slideUp 0.3s ease-in;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateX(-50%) translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(-50%) translateY(-100%);
+        opacity: 0;
+    }
+}
+
 /* ===== ENHANCED EMPTY STATE ===== */
 .empty-state-container {
     min-height: 70vh;
@@ -2801,24 +2973,6 @@ export default {
 @keyframes float {
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-20px); }
-}
-
-.empty-state-icon-accent {
-    position: absolute;
-    font-size: 40px;
-    animation: orbit 4s linear infinite;
-}
-
-.empty-state-icon-accent:nth-child(2) {
-    animation-delay: 0s;
-}
-
-.empty-state-icon-accent:nth-child(3) {
-    animation-delay: 1.3s;
-}
-
-.empty-state-icon-accent:nth-child(4) {
-    animation-delay: 2.6s;
 }
 
 @keyframes orbit {
@@ -3335,6 +3489,20 @@ export default {
         height: 44px;
     }
 
+    /* Success notification mobile */
+    .success-notification-top {
+        top: 10px;
+        width: calc(100% - 20px);
+    }
+    
+    .success-notification-content {
+        padding: 14px 16px;
+    }
+    
+    .success-message-text {
+        font-size: 0.9em;
+    }
+
     /* Empty state responsive */
     .empty-state-card {
         padding: 40px 25px;
@@ -3470,10 +3638,6 @@ export default {
         font-size: 70px;
     }
     
-    .empty-state-icon-accent {
-        font-size: 30px;
-    }
-    
     @keyframes orbit {
         0%, 100% {
             transform: rotate(0deg) translateX(60px) rotate(0deg);
@@ -3553,7 +3717,6 @@ select:focus-visible {
 /* Accessibility - Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
     .empty-state-icon-large,
-    .empty-state-icon-accent,
     .empty-state-card,
     .how-it-works-icon-badge,
     .step-arrow {
