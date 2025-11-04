@@ -22,8 +22,8 @@
           <li class="step">
             <div class="dot"><i class="fa-solid fa-camera"></i></div>
             <div class="meta">
-              <h3>Scan & Add</h3>
-              <p>Scan receipts or type items — we track quantities, locations, and expiry dates.</p>
+              <h3>Add Ingredients</h3>
+              <p>we track quantities, locations, and expiry dates.</p>
             </div>
           </li>
 
@@ -336,7 +336,7 @@
                 </p>
               </div>
               <div class="t-author mt-auto d-flex align-items-center gap-2">
-                <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=SunnyChef"
+                <img src="/public/avatars/f_avatar1.png"
                   alt="Cartoon avatar of a happy chef" />
                 <div>
                   <div class="t-name">Jasmine</div>
@@ -354,7 +354,7 @@
                     recipes</strong> for items expiring soon, so stock rotates naturally without me thinking.”</p>
               </div>
               <div class="t-author mt-auto d-flex align-items-center gap-2">
-                <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=ShopOwnerSue"
+                <img src="/public/avatars/m_avatar2.png"
                   alt="Cartoon avatar of a shop owner" />
                 <div>
                   <div class="t-name">Jonathan</div>
@@ -374,7 +374,7 @@
                 </p>
               </div>
               <div class="t-author mt-auto d-flex align-items-center gap-2">
-                <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=CreatorJake"
+                <img src="/public/avatars/f_avatar2.png"
                   alt="Cartoon avatar of a content creator" />
                 <div>
                   <div class="t-name">Ashley</div>
