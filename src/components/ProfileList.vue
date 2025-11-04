@@ -162,118 +162,128 @@ export default {
 
 <template>
   <div class="profile-list-wrapper">
-    <div class="profile-list-container">
-      <!-- Header Section -->
-      <div class="profile-header">
-        <div class="header-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-        </div>
-        <h2>Household Profiles</h2>
-        <p class="subtitle">Manage your family's dietary preferences and allergens</p>
-      </div>
-
-
-      <!-- Empty State -->
-      <div v-if="profiles.length === 0" class="empty-state">
-        <div class="empty-icon">👥</div>
-        <h3>No Profiles Yet</h3>
-        <p>Create your first household profile to get started</p>
-        <button @click="goToCreateProfile" class="btn btn-primary">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Create First Profile
-        </button>
-      </div>
-
-      <div v-else class="profiles-section">
-        <div class="section-header">
-          <h3>Your Profiles</h3>
-          <span class="profile-count">{{ profiles.length }} {{ profiles.length === 1 ? 'Profile' : 'Profiles' }}</span>
-        </div>
-
-        <div class="profiles-grid">
-          <div
-            v-for="p in profiles"
-            :key="p.id"
-            class="profile-card"
-            :class="{ active: p.is_active }"
-            @mouseenter="hoverProfile = p.id"
-            @mouseleave="hoverProfile = null"
-          >
-
-            <div v-if="p.is_active" class="active-badge">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              Active
-            </div>
-
-            <button 
-              v-if="hoverProfile === p.id" 
-              class="edit-button"
-              @click="goToEditProfile(p.id)"
-              title="Edit Profile"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-
-            <div class="profile-avatar">
-              <span class="avatar-initial">{{ getInitial(p.profile_name) }}</span>
-            </div>
-
-            <div class="profile-info">
-              <h4 class="profile-name">{{ p.profile_name }}</h4>
-              
-              <div class="profile-details">
-                <div class="detail-item">
-                  <span class="detail-text">Allegies: {{ formatList(p.food_allergens) }}</span>
-                </div>
-                
-                <div class="detail-item"> 
-                  <span class="detail-text">Preferences: {{ formatList(p.preferred_cuisines) }}</span>
-                </div>
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-12 col-xl-10">
+          <div class="profile-list-container">
+            <!-- Header Section -->
+            <div class="profile-header">
+              <div class="header-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
               </div>
+              <h2>Household Profiles</h2>
+              <p class="subtitle">Manage your family's dietary preferences and allergens</p>
             </div>
 
-            <button 
-              v-if="!p.is_active" 
-              @click="setActive(p.id)" 
-              class="btn-set-active"
-            >
-              Set as Active
-            </button>
-          </div>
-
-          <div class="profile-card add-card" @click="goToCreateProfile">
-            <div class="add-content">
-              <div class="add-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Empty State -->
+            <div v-if="profiles.length === 0" class="empty-state">
+              <div class="empty-icon">👥</div>
+              <h3>No Profiles Yet</h3>
+              <p>Create your first household profile to get started</p>
+              <button @click="goToCreateProfile" class="btn btn-primary d-inline-flex align-items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-              </div>
-              <p class="add-text">Add New Profile</p>
+                Create First Profile
+              </button>
             </div>
+
+            <div v-else class="profiles-section">
+              <div class="section-header d-flex justify-content-between align-items-center">
+                <h3>Your Profiles</h3>
+                <span class="profile-count">{{ profiles.length }} {{ profiles.length === 1 ? 'Profile' : 'Profiles' }}</span>
+              </div>
+
+              <div class="row g-3 g-md-4">
+                <div
+                  v-for="p in profiles"
+                  :key="p.id"
+                  class="col-12 col-sm-6 col-lg-4 col-xl-3"
+                >
+                  <div
+                    class="profile-card"
+                    :class="{ active: p.is_active }"
+                    @mouseenter="hoverProfile = p.id"
+                    @mouseleave="hoverProfile = null"
+                  >
+                    <div v-if="p.is_active" class="active-badge d-flex align-items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="me-1">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Active
+                    </div>
+
+                    <button 
+                      v-if="hoverProfile === p.id" 
+                      class="edit-button d-flex align-items-center justify-content-center"
+                      @click="goToEditProfile(p.id)"
+                      title="Edit Profile"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                    </button>
+
+                    <div class="profile-avatar d-flex align-items-center justify-content-center mx-auto">
+                      <span class="avatar-initial">{{ getInitial(p.profile_name) }}</span>
+                    </div>
+
+                    <div class="profile-info text-center">
+                      <h4 class="profile-name">{{ p.profile_name }}</h4>
+                      
+                      <div class="profile-details d-flex flex-column">
+                        <div class="detail-item d-flex align-items-start">
+                          <span class="detail-text">Allegies: {{ formatList(p.food_allergens) }}</span>
+                        </div>
+                        
+                        <div class="detail-item d-flex align-items-start"> 
+                          <span class="detail-text">Preferences: {{ formatList(p.preferred_cuisines) }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button 
+                      v-if="!p.is_active" 
+                      @click="setActive(p.id)" 
+                      class="btn-set-active w-100"
+                    >
+                      Set as Active
+                    </button>
+                  </div>
+                </div>
+
+                <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+                  <div class="profile-card add-card d-flex align-items-center justify-content-center" @click="goToCreateProfile">
+                    <div class="add-content text-center">
+                      <div class="add-icon d-flex align-items-center justify-content-center mx-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                      </div>
+                      <p class="add-text">Add New Profile</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <transition name="fade">
+              <div v-if="message" class="alert success d-flex align-items-center">
+                <span class="alert-icon d-flex align-items-center justify-content-center">✓</span>
+                <span>{{ message }}</span>
+              </div>
+            </transition>
           </div>
         </div>
       </div>
-
-      <transition name="fade">
-        <div v-if="message" class="alert success">
-          <span class="alert-icon">✓</span>
-          <span>{{ message }}</span>
-        </div>
-      </transition>
     </div>
   </div>
 </template>
@@ -286,8 +296,6 @@ export default {
 }
 
 .profile-list-container {
-  max-width: 1000px;
-  margin: 0 auto;
   background: #ffffff;
   border-radius: 24px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
@@ -367,18 +375,6 @@ export default {
   z-index: 1;
 }
 
-/* Loading State */
-.loading-state {
-  padding: 4rem 2rem;
-  text-align: center;
-  color: #757575;
-}
-
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 /* Empty State */
 .empty-state {
   padding: 4rem 2rem;
@@ -408,9 +404,6 @@ export default {
 }
 
 .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 2px solid #f0f0f0;
@@ -431,13 +424,6 @@ export default {
   font-weight: 600;
 }
 
-/* Profiles Grid */
-.profiles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1.25rem;
-}
-
 /* Profile Card */
 .profile-card {
   position: relative;
@@ -448,6 +434,7 @@ export default {
   transition: all 0.3s ease;
   cursor: pointer;
   animation: fadeIn 0.5s ease-out backwards;
+  height: 100%;
 }
 
 .profile-card:nth-child(1) { animation-delay: 0.1s; }
@@ -488,8 +475,6 @@ export default {
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
-  display: flex;
-  align-items: center;
   gap: 0.25rem;
   box-shadow: 0 2px 8px rgba(46, 125, 50, 0.3);
 }
@@ -505,9 +490,6 @@ export default {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
   z-index: 10;
@@ -523,10 +505,7 @@ export default {
   height: 70px;
   background: linear-gradient(135deg, #2e7d32, #388e3c);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 1rem;
+  margin-bottom: 1rem;
   box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
 }
 
@@ -537,7 +516,6 @@ export default {
 }
 
 .profile-info {
-  text-align: center;
   margin-bottom: 1rem;
 }
 
@@ -549,14 +527,10 @@ export default {
 }
 
 .profile-details {
-  display: flex;
-  flex-direction: column;
   gap: 0.625rem;
 }
 
 .detail-item {
-  display: flex;
-  align-items: flex-start;
   gap: 0.5rem;
   padding: 0.5rem;
   background: white;
@@ -583,7 +557,6 @@ export default {
 }
 
 .btn-set-active {
-  width: 100%;
   padding: 0.625rem;
   background: linear-gradient(135deg, #2e7d32, #388e3c);
   color: white;
@@ -604,9 +577,6 @@ export default {
 .add-card {
   border: 2px dashed #bdbdbd;
   background: #fafafa;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 250px;
 }
 
@@ -615,19 +585,12 @@ export default {
   background: #f1f8f6;
 }
 
-.add-content {
-  text-align: center;
-}
-
 .add-icon {
   width: 60px;
   height: 60px;
   background: #e8f5e9;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .add-icon svg {
@@ -642,8 +605,6 @@ export default {
 }
 
 .btn {
-  display: inline-flex;
-  align-items: center;
   gap: 0.5rem;
   padding: 0.875rem 1.75rem;
   border: none;
@@ -664,14 +625,13 @@ export default {
   background: linear-gradient(135deg, #1b5e20, #2e7d32);
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(46, 125, 50, 0.4);
+  color: white;
 }
 
 .alert {
   position: fixed;
   top: 2rem;
   right: 2rem;
-  display: flex;
-  align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
   border-radius: 12px;
@@ -699,9 +659,6 @@ export default {
 }
 
 .alert-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -719,13 +676,8 @@ export default {
   opacity: 0;
 }
 
-@media (max-width: 768px) {
-  .profiles-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
+/* Responsive adjustments */
+@media (max-width: 576px) {
   .profile-list-wrapper {
     padding: 1rem;
   }
@@ -740,11 +692,6 @@ export default {
 
   .profiles-section {
     padding: 1.5rem;
-  }
-
-  .profiles-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
   }
 
   .alert {
