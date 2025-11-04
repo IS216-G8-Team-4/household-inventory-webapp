@@ -116,17 +116,19 @@
                     return { ...ingredient, batches: [] }
                 }
 
-                const batches = batchesData.map(batch => ({
-                    id: batch.id,
-                    quantity: batch.quantity,
-                    expiryDate: batch.expiry_date
-                }))
+                const batches = batchesData
+                    .filter(batch=> batch.quantity>0)
+                    .map(batch => ({
+                        id: batch.id,
+                        quantity: batch.quantity,
+                        expiryDate: batch.expiry_date
+                    }))
 
                 return { ...ingredient, batches }
             })
         )
 
-        inventory.value = enrichedIngredients
+        inventory.value = enrichedIngredients.filter(i=>i.batches.length>0)
         // console.log('Inventory fetched:', inventory.value) // Console Log: Fetched Ingredients with Batches
     }
 
@@ -141,6 +143,22 @@
             query: { id: itemId, batch: batchId }
         })
     }
+
+    function goToDonate(item, batch) {
+        router.push({
+            path: '/SubmitDonation',
+            query: {
+            name: item.name,
+            category: item.category,
+            unit: item.unit,
+            quantity: batch.quantity,
+            itemId: item.id,
+            batchId: batch.id,
+            expiry: batch.expiryDate
+            }
+        })
+    }
+
 
     // Calculate days until expiry
     function timeUntilExpiry(expiryDateStr) { 
@@ -274,7 +292,8 @@
                                 <td>{{ batch.expiryDate }}</td>
                                 <td>{{ timeUntilExpiry(batch.expiryDate) }}</td>
                                 <td class="text-end">
-                                    <button class="btn btn-success btn-sm" @click="goToEdit(item.id, batch.id)">Edit</button>
+                                    <button class="btn btn-success btn-sm me-2" @click="goToEdit(item.id, batch.id)">Edit</button>
+                                    <button class="btn btn-warning btn-sm" @click="goToDonate(item, batch)">Donate</button>
                                 </td>
                             </tr>
                         </tbody>
