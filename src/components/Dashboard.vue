@@ -22,15 +22,24 @@ export default {
         usedPercent: 0,
       },
       tips: ["Plan meals around items expiring soon to keep wastage low."],
+      allTips: [
+        "Plan meals around items expiring soon to keep wastage low.",
+        "Check your pantry twice a week to stay on top of expiry dates.",
+        "Store leftovers in clear containers so you remember to eat them.",
+        "Freeze items before they expire to extend their shelf life.",
+        "Share surplus food with neighbors or local food banks.",
+        "Use the 'first in, first out' method when organizing your pantry.",
+        "Turn overripe fruits into smoothies, jams, or baked goods.",
+        "Compost food scraps to reduce waste and nourish your garden.",
+        "Buy only what you need and stick to your shopping list.",
+        "Keep your fridge at the right temperature (below 5°C) to preserve food longer.",
+        "Learn to distinguish 'best before' from 'use by' dates.",
+        "Use the recipes feature to create a weekly meal plan to avoid impulse purchases.",
+        "Donate unexpired items you won't use to those in need."
+      ],
       expiryNotifications: {
         urgent: [],
         warning: [],
-      },
-      usageTrends: {
-        weeklyChange: 0,
-        mostConsumed: "N/A",
-        fastestCategory: "N/A",
-        shoppingFrequency: "N/A",
       },
     };
   },
@@ -45,22 +54,33 @@ export default {
     warning() {
       return this.expiryNotifications.warning.length;
     },
-    weeklyTrend() {
-      if (this.usageTrends.weeklyChange > 0) return 'up';
-      if (this.usageTrends.weeklyChange < 0) return 'down';
-      return 'same';
-    },
   },
 
   methods: {
+    //standardize quantities to "item count" based on unit
+    standardizeQuantity(quantity, unit) {
+      const amount = parseFloat(quantity) || 0;
+      
+      //define standard serving sizes for each unit
+      const standardServings = {
+        'kg': 1,      
+        'g': 0.01,   
+        'L': 1,       
+        'ml': 0.004,  
+        'pcs': 1,     
+        'pack': 1.5,    
+      };
+      
+      const multiplier = standardServings[unit] || 1;
+      return amount * multiplier;
+    },
+
     calcPercent(wasted, saved) {
       const total = (wasted || 0) + (saved || 0);
       if (total === 0) {
         return 0;
       }
-      else {
-        return Math.round((wasted/total)*100)
-      }
+      return Math.round((wasted/total)*100);
     },
 
     getDaysUntilExpiry(expiryDate) {
@@ -80,12 +100,64 @@ export default {
       });
     },
 
+    //calculate sustainability score based on saved vs wasted items
+    calculateSustainabilityScore(itemsSaved, itemsWasted, itemsDonated) {
+      const totalItems = itemsSaved + itemsWasted + itemsDonated;
+      if (totalItems === 0) return 0;
+      
+      //score components:
+      // - 60% based on items saved/used
+      // - 30% based on items donated
+      // - 10% penalty for items wasted
+      const savedScore = (itemsSaved / totalItems) * 60;
+      const donatedScore = (itemsDonated / totalItems) * 30;
+      const wastePenalty = (itemsWasted / totalItems) * 10;
+      
+      return Math.max(0, Math.min(100, Math.round(savedScore + donatedScore - wastePenalty)));
+    },
+
+    //calculate CO2 saved based on items saved and donated
+    //average: 1 item saved/donated = ~0.5 kg CO2 prevented
+    calculateCO2Saved(itemsSaved, itemsDonated) {
+      const CO2_PER_ITEM = 0.5; // kg CO2 per item
+      return ((itemsSaved + itemsDonated) * CO2_PER_ITEM).toFixed(1);
+    },
+
+    //estimate money saved based on items consumed
+    calculateMoneySaved(itemsSaved) {
+      const AVG_ITEM_VALUE = 3; // SGD per item
+      return (itemsSaved * AVG_ITEM_VALUE).toFixed(2);
+    },
+
     async fetchExpiringIngredients(householdId) {
       try {
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const threeDaysFromNow = new Date();
         threeDaysFromNow.setDate(today.getDate() + 3);
+        threeDaysFromNow.setHours(23, 59, 59, 999);
 
+        //get all ingredients for this household to filter batches
+        const { data: householdIngredients, error: ingredientError } = await supabase
+          .from("ingredients")
+          .select("id")
+          .eq("household_id", householdId);
+
+        if (ingredientError) {
+          console.error("Error fetching household ingredients", ingredientError);
+          return;
+        }
+
+        if (!householdIngredients || householdIngredients.length === 0) {
+          console.log("No ingredients found for household");
+          this.expiryNotifications = { urgent: [], warning: [] };
+          return;
+        }
+
+        //extract ingredient IDs
+        const ingredientIds = householdIngredients.map(ing => ing.id);
+
+        //fetch expiring batches for these ingredients
         const { data: batches, error } = await supabase
           .from("ingredient_batches")
           .select(`
@@ -101,59 +173,23 @@ export default {
             )
           `)
           .eq("status", "active")
+          .in("ingredient_id", ingredientIds)
           .lte("expiry_date", threeDaysFromNow.toISOString().split('T')[0])
           .gte("expiry_date", today.toISOString().split('T')[0]);
 
         if (error) throw error;
 
+        const urgent = [];
+        const warning = [];
+
         if (batches && batches.length > 0) {
-
-          //fetch ingredients belonging to this household
-          const { data: householdIngredients, error: ingredientError } = await supabase
-            .from("ingredients")
-            .select("id")
-            .eq("household_id", householdId);
-
-          if (ingredientError) {
-            console.error("Error fetching household ingredients", ingredientError);
-            return;
-          }
-
-          //extract ingredient IDs 
-          let householdIngredientIds = new Set();
-
-          if (householdIngredients && householdIngredients.length > 0) {
-            const ids = [];
-
-            for (let i = 0; i < householdIngredients.length; i++) {
-              const ingredient = householdIngredients[i];
-              ids.push(ingredient.id);
-            }
-
-            householdIngredientIds = new Set(ids);
-          }
-
-          //filter batches to only include those belonging to this household
-          const filteredBatches = [];
-
           for (let i = 0; i < batches.length; i++) {
             const batch = batches[i];
-
-            //ensure ingredient exists and belongs to this household
-            if (batch.ingredient && householdIngredientIds.has(batch.ingredient.id)) {
-              filteredBatches.push(batch);
-            }
-          }
-
-          const urgent = [];
-          const warning = [];
-
-          for (let i = 0; i < filteredBatches.length; i++) {
-            const batch = filteredBatches[i];
             const daysUntil = this.getDaysUntilExpiry(batch.expiry_date);
 
             const item = {
               id: batch.id,
+              batchId: batch.id,
               name: batch.ingredient.name,
               quantity: batch.quantity,
               unit: batch.ingredient.unit,
@@ -169,162 +205,247 @@ export default {
               warning.push(item);
             }
           }
-
-          // sort and store
-          this.expiryNotifications = {
-            urgent: urgent.sort((a, b) => a.daysUntil - b.daysUntil),
-            warning: warning.sort((a, b) => a.daysUntil - b.daysUntil)
-          };
         }
-    } 
-    catch (error) {
+
+        this.expiryNotifications = {
+          urgent: urgent.sort((a, b) => a.daysUntil - b.daysUntil),
+          warning: warning.sort((a, b) => a.daysUntil - b.daysUntil)
+        };
+      } 
+      catch (error) {
         console.error("Error fetching expiring ingredients:", error.message);
       }
     },
 
-  async fetchUsageTrends(householdId) {
-  try {
-    const today = new Date();
+    async fetchMonthlyMetrics(householdId) {
+      try {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    //define date ranges
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(today.getDate() - 7);
+        console.log("Fetching metrics for household:", householdId);
+        console.log("Date range:", firstDayOfMonth, "to", lastDayOfMonth);
 
-    const twoWeeksAgo = new Date();
-    twoWeeksAgo.setDate(today.getDate() - 14);
+        // Get items donated with standardized quantities
+        const { data: donations, error: donationsError } = await supabase
+            .from("donation_submissions")
+            .select("Item_Quan, Unit")
+            .eq("household_id", householdId)
+            .eq("Claimed", true);
 
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setDate(today.getDate() - 30);
-
-    //get ingredients for this household 
-    const { data: householdIngredients } = await supabase
-      .from("ingredients")
-      .select("id")
-      .eq("household_id", householdId);
-
-    let ingredientIds = [];
-    if (householdIngredients && householdIngredients.length > 0) {
-      for (let i = 0; i < householdIngredients.length; i++) {
-        ingredientIds.push(householdIngredients[i].id);
-      }
-    } 
-    else {
-      return;
-    }
-
-    //retrieve usage logs for last 2 weeks
-    const { data: logs } = await supabase
-      .from("ingredient_usage_logs")
-      .select("ingredient_id, quantity_used, used_at, ingredients(name, category)")
-      .in("ingredient_id", ingredientIds)
-      .gte("used_at", twoWeeksAgo.toISOString())
-      .order("used_at", { ascending: false });
-
-    if (logs && logs.length > 0) {
-      const thisWeekLogs = [];
-      const lastWeekLogs = [];
-
-      for (let i = 0; i < logs.length; i++) {
-        const logDate = new Date(logs[i].used_at);
-        if (logDate >= oneWeekAgo) {
-          thisWeekLogs.push(logs[i]);
-        } 
-        else if (logDate >= twoWeeksAgo && logDate < oneWeekAgo) {
-          lastWeekLogs.push(logs[i]);
-        }
-      }
-
-      const thisWeekCount = thisWeekLogs.length;
-      const lastWeekCount = lastWeekLogs.length;
-
-      if (lastWeekCount > 0) {
-        const change = ((thisWeekCount - lastWeekCount) / lastWeekCount) * 100;
-        this.usageTrends.weeklyChange = Math.round(change);
-      } 
-      else {
-        this.usageTrends.weeklyChange = 0;
-      }
-
-      //calculate most consumed item ---
-      const itemCounts = {};
-      for (let i = 0; i < logs.length; i++) {
-        let name = "Unknown";
-        if (logs[i].ingredients) {
-          name = logs[i].ingredients.name;
+        if (donationsError) {
+          console.error("Donations error:", donationsError);
+          throw donationsError;
         }
 
-        if (itemCounts[name]) {
-          itemCounts[name] += 1;
-        } 
-        else {
-          itemCounts[name] = 1;
-        }
-      }
-
-      let mostConsumed = "N/A";
-      let maxCount = 0;
-      for (let key in itemCounts) {
-        if (itemCounts[key] > maxCount) {
-          maxCount = itemCounts[key];
-          mostConsumed = key;
-        }
-      }
-      this.usageTrends.mostConsumed = mostConsumed;
-
-      //calculate fastest depleted category
-      const categoryCounts = {};
-      for (let i = 0; i < logs.length; i++) {
-        let category = "Other";
-        if (logs[i].ingredients) {
-          category = logs[i].ingredients.category;
-        }
-
-        if (categoryCounts[category]) {
-          categoryCounts[category] += 1;
-        } else {
-          categoryCounts[category] = 1;
-        }
-      }
-
-      let fastestCategory = "N/A";
-      let maxCategoryCount = 0;
-      for (let key in categoryCounts) {
-        if (categoryCounts[key] > maxCategoryCount) {
-          maxCategoryCount = categoryCounts[key];
-          fastestCategory = key;
-        }
-      }
-      this.usageTrends.fastestCategory = fastestCategory;
-    }
-
-    //calculate shopping frequency
-    const { data: batches } = await supabase
-      .from("ingredient_batches")
-      .select("created_at, ingredient:ingredients(household_id)")
-      .gte("created_at", oneMonthAgo.toISOString());
-
-    if (batches && batches.length > 0) {
-      const householdBatches = [];
-      for (let i = 0; i < batches.length; i++) {
-        if (batches[i].ingredient) {
-          if (batches[i].ingredient.household_id === householdId) {
-            householdBatches.push(batches[i]);
+        let itemsDonated = 0;
+        if (donations && donations.length > 0) {
+          for (let i = 0; i < donations.length; i++) {
+            const donation = donations[i];
+            itemsDonated += this.standardizeQuantity(donation.Item_Quan, donation.Unit);
           }
         }
-      }
-      this.usageTrends.shoppingFrequency = householdBatches.length;
+        console.log("Items donated (standardized):", itemsDonated);
 
-      const trips = householdBatches.length;
-      if (trips > 0) {
-          const frequency = Math.round(30 / trips);
-          this.usageTrends.shoppingFrequency = `Every ${frequency} days`;
+        //get all ingredients for this household
+        const { data: householdIngredients, error: ingredientsError } = await supabase
+          .from("ingredients")
+          .select("id, unit")
+          .eq("household_id", householdId);
+
+        if (ingredientsError) {
+          console.error("Ingredients error:", ingredientsError);
         }
-    }
-  } 
-  catch (error) {
-        console.error("Error fetching usage trends:", error.message);
+
+        let ingredientIds = [];
+        let ingredientUnits = {};
+        if (householdIngredients && householdIngredients.length > 0) {
+          for (let i = 0; i < householdIngredients.length; i++) {
+            ingredientIds.push(householdIngredients[i].id);
+            ingredientUnits[householdIngredients[i].id] = householdIngredients[i].unit;
+          }
+        }
+        console.log("Ingredient IDs:", ingredientIds);
+
+        let itemsUsed = 0;
+        if (ingredientIds.length > 0) {
+          //get items consumed this month with quantities
+          const { data: consumptions, error: consumptionsError } = await supabase
+            .from("consumption_logs")
+            .select("ingredient_id, quantity_used")
+            .in("ingredient_id", ingredientIds)
+            .gte("consumed_date", firstDayOfMonth.toISOString())
+            .lte("consumed_date", lastDayOfMonth.toISOString());
+
+          if (consumptionsError) {
+            console.error("Consumptions error:", consumptionsError);
+          } else if (consumptions && consumptions.length > 0) {
+            for (let i = 0; i < consumptions.length; i++) {
+              const consumption = consumptions[i];
+              const unit = ingredientUnits[consumption.ingredient_id];
+              itemsUsed += this.standardizeQuantity(consumption.quantity_used, unit);
+            }
+          }
+          console.log("Items used (standardized):", itemsUsed);
+        }
+
+        //get expired items (count from batches)
+        const itemsWasted = await this.countExpiredBatches(ingredientIds, ingredientUnits);
+        console.log("Items wasted (standardized):", itemsWasted);
+
+        //get current inventory count from active batches
+        let currentInventory = 0;
+        if (ingredientIds.length > 0) {
+          const { data: activeBatches, error: inventoryError } = await supabase
+            .from("ingredient_batches")
+            .select("ingredient_id, quantity")
+            .in("ingredient_id", ingredientIds)
+            .eq("status", "active");
+
+          if (inventoryError) {
+            console.error("Inventory error:", inventoryError);
+          } else if (activeBatches && activeBatches.length > 0) {
+            for (let i = 0; i < activeBatches.length; i++) {
+              const batch = activeBatches[i];
+              const unit = ingredientUnits[batch.ingredient_id];
+              currentInventory += this.standardizeQuantity(batch.quantity, unit);
+            }
+          }
+          console.log("Current inventory (standardized):", currentInventory);
+        }
+
+        //calculate percentages based on formulas
+        //expired % = expired / (current inventory + expired)
+        const totalWithExpired = currentInventory + itemsWasted;
+        let expiredPercent = 0
+        if (totalWithExpired > 0) {
+          const ratio = (itemsWasted/totalWithExpired)*100
+          expiredPercent = Math.ceil(ratio)
+        }
+        expiredPercent = Math.min(expiredPercent, 100)
+
+        //used/donated % = (used + donated) / (current inventory + used + donated)
+        const usedAndDonated = itemsUsed + itemsDonated;
+        const totalWithUsedDonated = currentInventory + usedAndDonated;
+        const usedDonatedPercent = totalWithUsedDonated > 0 
+          ? Math.round((usedAndDonated / totalWithUsedDonated) * 100) 
+          : 0;
+        console.log("Expired %:", expiredPercent);
+        console.log("Used/Donated %:", usedDonatedPercent);
+
+        //calculate metrics
+        const itemsSaved = itemsUsed;
+        const co2Saved = this.calculateCO2Saved(itemsSaved, itemsDonated);
+        const moneySaved = this.calculateMoneySaved(itemsSaved);
+        const sustainabilityScore = this.calculateSustainabilityScore(
+          itemsSaved, 
+          itemsWasted, 
+          itemsDonated
+        );
+
+        //update data
+        this.summary = {
+          score: sustainabilityScore,
+          co2Saved: `${co2Saved} kg`,
+          itemsSaved: Math.round(itemsSaved),
+        };
+
+        this.impact = {
+          co2Prevented: parseFloat(co2Saved),
+          trees: (parseFloat(co2Saved) / 8.8).toFixed(1),
+        };
+
+        this.savings = {
+          valueSaved: `${moneySaved}`,
+          itemsDonated: Math.round(itemsDonated),
+        };
+
+        this.wastage = {
+          expiredPercent: expiredPercent,
+          usedPercent: usedDonatedPercent,
+        };
+
+        //update tips based on metrics
+        if (this.wastage.expiredPercent > 20) {
+          this.tips = [
+            this.allTips[1], 
+            this.allTips[3], 
+          ];
+        } else if (this.impact.co2Prevented > 10) {
+          this.tips = [
+            this.allTips[4], 
+            this.allTips[7], 
+          ];
+        } else if (itemsDonated > 5) {
+          this.tips = [
+            this.allTips[12], 
+            this.allTips[4], 
+          ];
+        } else if (this.wastage.expiredPercent < 5 && itemsUsed > 10) {
+          this.tips = [
+            this.allTips[5], 
+            this.allTips[9], 
+          ];
+        } else {
+          //random tips for neutral performance
+          const randomIndex = Math.floor(Math.random() * this.allTips.length);
+          const secondIndex = (randomIndex + Math.floor(Math.random() * (this.allTips.length - 1)) + 1) % this.allTips.length;
+          this.tips = [
+            this.allTips[randomIndex],
+            this.allTips[secondIndex],
+          ];
+        }
+      } 
+      catch (error) {
+        console.error("Error fetching monthly metrics:", error.message);
       }
-  },
+    },
+
+    async countExpiredBatches(ingredientIds, ingredientUnits) {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (!ingredientIds || ingredientIds.length === 0) {
+          console.log("No ingredient IDs provided for expired batch count");
+          return 0;
+        }
+
+        console.log("Counting expired batches for ingredient IDs:", ingredientIds);
+
+        //get batches that have expired  
+        const { data: expiredBatches, error } = await supabase
+          .from("ingredient_batches")
+          .select("ingredient_id, quantity, expiry_date, status")
+          .in("ingredient_id", ingredientIds)
+          .lt("expiry_date", today.toISOString().split('T')[0]);
+
+        if (error) {
+          console.error("Error fetching expired batches:", error);
+          return 0;
+        }
+
+        console.log("Expired batches found:", expiredBatches ? expiredBatches.length : 0);
+
+        //alculate standardized count from all expired batches
+        let expiredCount = 0;
+        if (expiredBatches && expiredBatches.length > 0) {
+          for (let i = 0; i < expiredBatches.length; i++) {
+            const batch = expiredBatches[i];
+            const unit = ingredientUnits[batch.ingredient_id];
+            const standardizedQty = this.standardizeQuantity(batch.quantity, unit);
+            expiredCount += standardizedQty;
+            console.log(`Batch ${i}: ${batch.quantity} ${unit} = ${standardizedQty} items (status: ${batch.status})`);
+          }
+        }
+
+        console.log("Total expired count (standardized):", expiredCount);
+        return expiredCount;
+      } catch (error) {
+        console.error("Error in countExpiredBatches:", error.message);
+        return 0;
+      }
+    },
 
     async fetchDashboardData() {
       try {
@@ -343,51 +464,9 @@ export default {
         const householdId = household.id;
       
         await this.fetchExpiringIngredients(householdId);
-        await this.fetchUsageTrends(householdId);
-
-        const { data: metrics, error: metricsErr } = await supabase
-          .from("sustainability_metrics")
-          .select("*")
-          .eq("household_id", householdId)
-          .order("month", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (metricsErr) console.error(metricsErr);
-
-        if (metrics) {
-          this.summary = {
-            score: metrics.sustainability_score || 0,
-            co2Saved: `${(metrics.co2_saved_kg || 0).toFixed(1)} kg`,
-            itemsSaved: metrics.items_saved || 0,
-          };
-
-          this.impact = {
-            co2Prevented: metrics.co2_saved_kg || 0,
-            trees: (metrics.co2_saved_kg / 8.8).toFixed(1),
-          };
-
-          this.savings = {
-            valueSaved: `$${(metrics.money_saved_sgd || 0).toFixed(2)}`,
-            itemsDonated: metrics.items_donated || 0,
-          };
-
-          this.wastage = {
-            expiredPercent: this.calcPercent(metrics.items_wasted, metrics.items_saved),
-            usedPercent: 100 - this.calcPercent(metrics.items_wasted, metrics.items_saved),
-          };
-        }
-
-        if (this.wastage.expiredPercent > 20) {
-          this.tips = [
-            "Check your pantry twice a week to cut down on food waste!",
-          ];
-        } else if (this.impact.co2Prevented > 10) {
-          this.tips = [
-            "Amazing! Keep donating to boost your CO₂ savings further 🌿",
-          ];
-        }
-      } catch (error) {
+        await this.fetchMonthlyMetrics(householdId);
+      } 
+      catch (error) {
         console.error("Error loading dashboard:", error.message);
       }
     },
@@ -409,202 +488,169 @@ export default {
       </h2>
       <p class="muted" style="color: white;">
         You saved <b>{{ summary.co2Saved }}</b> CO₂ and
-        <b>{{ summary.itemsSaved }}</b> items this month.
+        <b>{{ summary.itemsSaved }}</b> items.
       </p>
     </header>
 
     <!-- main grid -->
-    <section class="grid">
-      <!-- Environmental Impact -->
-      <section class="card fade-in">
-        <h3>Environmental Impact</h3>
-        <div class="circle">
-          <div class="circle-text">{{ impact.co2Prevented }} kg CO₂</div>
-        </div>
-        <p class="muted">≈ {{ impact.trees }} trees saved</p>
-      </section>
-
-      <!-- wastage overview -->
-      <section class="card fade-in">
-        <h3>Wastage Overview</h3>
-
-        <!-- used/donated -->
-        <div class="metric-block">
-          <div class="metric-labels">
-            <span>Used / Donated</span>
-            <span class="used">{{ wastage.usedPercent }}%</span>
-          </div>
-          <div class="progress-bar">
-            <div 
-              class="progress-fill used-fill"
-              :style="{ width: wastage.usedPercent + '%' }" 
-            ></div>
-          </div>
+    <section class="container-fluid px-0 mt-4">
+      <div class="row g-3">
+        <!-- Environmental Impact -->
+        <div class="col-12 col-lg-6">
+          <section class="card fade-in h-100">
+            <h3>Environmental Impact</h3>
+            <div class="circle">
+              <div class="circle-text">{{ impact.co2Prevented }} kg CO₂</div>
+            </div>
+            <p class="muted text-center">≈ {{ impact.trees }} trees saved</p>
+          </section>
         </div>
 
-        <!-- expired -->
-        <div class="metric-block">
-          <div class="metric-labels">
-            <span>Expired</span>
-            <span class="expired">{{ wastage.expiredPercent }}%</span>
-          </div>
-          <div class="progress-bar">
-            <div 
-              class="progress-fill expired-fill"
-              :style="{ width: wastage.expiredPercent + '%' }"
-            ></div>
-          </div>
-        </div>
+        <!-- wastage overview -->
+        <div class="col-12 col-lg-6">
+          <section class="card fade-in h-100">
+            <h3>Wastage Overview</h3>
 
-        <!-- expiry notifications -->
-        <div class="expiry-notifications">
-          <div class="notification-header">
-            <span class="notification-title">⚠️ Expiring Soon</span>
-            <span class="notification-count" v-if="totalExpiringItems > 0">
-              {{ totalExpiringItems }}
-            </span>
-          </div>
-
-          <div v-if="totalExpiringItems === 0" class="no-expiry">
-            <span class="checkmark">✓</span>
-            <span>No items expiring soon</span>
-          </div>
-
-          <div v-else class="notification-columns">
-            <div v-if="expiryNotifications.urgent.length > 0" class="notification-column">
-              <div class="section-label urgent-label">
-                🔴 Today/Tomorrow:  {{ urgent }} 
+            <!-- used/donated -->
+            <div class="metric-block">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="metric-label">Used & Donated</span>
+                <span class="used metric-value">{{ wastage.usedPercent }}%</span>
               </div>
-              <div class="notification-scroll-container">
-                <div class="notification-items">
-                  <div 
-                    v-for="item in expiryNotifications.urgent" 
-                    :key="item.id"
-                    class="notification-item urgent-item"
-                  >
-                    <div class="item-info">
-                      <span class="item-name">{{ item.name }}</span>
-                      <span class="item-quantity">{{ item.quantity }} {{ item.unit }}</span>
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill used-fill"
+                  :style="{ width: wastage.usedPercent + '%' }" 
+                ></div>
+              </div>
+            </div>
+
+            <!-- expired -->
+            <div class="metric-block">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="metric-label">Expired</span>
+                <span class="expired metric-value">{{ wastage.expiredPercent }}%</span>
+              </div>
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill expired-fill"
+                  :style="{ width: wastage.expiredPercent + '%' }"
+                ></div>
+              </div>
+            </div>
+
+            <!-- expiry notifications -->
+            <div class="expiry-notifications">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="notification-title">⚠️ Expiring Soon</span>
+                <span class="notification-count" v-if="totalExpiringItems > 0">
+                  {{ totalExpiringItems }}
+                </span>
+              </div>
+
+              <div v-if="totalExpiringItems === 0" class="no-expiry">
+                <span class="checkmark">✓</span>
+                <span>No items expiring soon</span>
+              </div>
+
+              <div v-else class="row g-2">
+                <div 
+                  v-if="expiryNotifications.urgent.length > 0" 
+                  :class="expiryNotifications.warning.length > 0 ? 'col-12 col-md-6' : 'col-12'"
+                >
+                  <div class="section-label urgent-label">
+                    🔴 Today/Tomorrow: {{ urgent }}
+                  </div>
+                  <div class="notification-scroll-container">
+                    <div class="notification-items">
+                      <div 
+                        v-for="item in expiryNotifications.urgent" 
+                        :key="item.id"
+                        class="notification-item urgent-item"
+                      >
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                          <span class="item-name">{{ item.name }}</span>
+                          <span class="item-quantity">{{ item.quantity }} {{ item.unit }}</span>
+                        </div>
+                        <div class="item-expiry urgent-expiry">
+                          {{ item.daysUntil === 0 ? 'Today' : 'Tomorrow' }}
+                        </div>
+                      </div>
                     </div>
-                    <div class="item-expiry urgent-expiry">
-                      {{ item.daysUntil === 0 ? 'Today' : 'Tomorrow' }}
+                  </div>
+                </div>
+
+                <div 
+                  v-if="expiryNotifications.warning.length > 0" 
+                  :class="expiryNotifications.urgent.length > 0 ? 'col-12 col-md-6' : 'col-12'"
+                >
+                  <div class="section-label warning-label">
+                    🟠 2-3 Days: {{ warning }}
+                  </div>
+                  <div class="notification-scroll-container">
+                    <div class="notification-items">
+                      <div 
+                        v-for="item in expiryNotifications.warning" 
+                        :key="item.id"
+                        class="notification-item warning-item"
+                      >
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                          <span class="item-name">{{ item.name }}</span>
+                          <span class="item-quantity">{{ item.quantity }} {{ item.unit }}</span>
+                        </div>
+                        <div class="item-expiry warning-expiry">
+                          {{ formatExpiryDate(item.expiryDate) }}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            <div v-if="expiryNotifications.warning.length > 0" class="notification-column">
-              <div class="section-label warning-label">
-                🟠 2-3 Days: {{ warning }}
-              </div>
-              <div class="notification-scroll-container">
-                <div class="notification-items">
-                  <div 
-                    v-for="item in expiryNotifications.warning" 
-                    :key="item.id"
-                    class="notification-item warning-item"
-                  >
-                    <div class="item-info">
-                      <span class="item-name">{{ item.name }}</span>
-                      <span class="item-quantity">{{ item.quantity }} {{ item.unit }}</span>
-                    </div>
-                    <div class="item-expiry warning-expiry">
-                      {{ formatExpiryDate(item.expiryDate) }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          </section>
         </div>
-      </section>
 
-      <!-- cost savings -->
-      <section class="card fade-in">
-        <h3>Cost Savings</h3>
+        <!-- cost savings -->
+        <div class="col-12 col-lg-6">
+          <section class="card fade-in h-100">
+            <h3>Cost Savings</h3>
             
-        <div class="savings-display">
-          <div class="savings-amount">
-            {{ savings.valueSaved }}
-          </div>
-          <div class="hint-text">saved this month</div>
-        </div>
-        
-        <div class="summary-list">
-          <div class="summary-row amber-row">
-            <div class="label-group">
-              <span>Items Donated</span>
-            </div>
-            <span class="value amber-text">{{ savings.itemsDonated }}</span>
-          </div>
-
-          <div class="summary-row green-row">
-            <div class="label-group">
-              <span>Items Saved</span>
-            </div>
-            <span class="value green-text">{{ summary.itemsSaved }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- usage trends -->
-      <section class="card fade-in">
-        <h3>Tips</h3>
-        
-        <div class="trends-grid">
-          <!-- weekly change -->
-          <!-- <div class="trend-card">
-            <div class="trend-icon" :class="weeklyTrend">
-              <span v-if="weeklyTrend === 'up'">📈</span>
-              <span v-else-if="weeklyTrend === 'down'">📉</span>
-              <span v-else>➡️</span>
-            </div>
-            <div class="trend-content">
-              <div class="trend-label">This Week</div>
-              <div class="trend-value" :class="weeklyTrend + '-text'">
-                {{ usageTrends.weeklyChange > 0 ? '+' : '' }}{{ usageTrends.weeklyChange }}%
+            <div class="text-center mb-4">
+              <div class="savings-amount">
+                ${{ savings.valueSaved }}
               </div>
-              <div class="trend-sublabel">vs last week</div>
+              <div class="hint-text">saved</div>
             </div>
-          </div> -->
+            
+            <div class="d-flex flex-column gap-3">
+              <div class="summary-row amber-row">
+                <div class="label-group">
+                  <span>Items Donated</span>
+                </div>
+                <span class="value amber-text">{{ savings.itemsDonated }}</span>
+              </div>
 
-          <!-- most consumed -->
-          <!-- <div class="trend-card">
-            <div class="trend-icon star">🌟</div>
-            <div class="trend-content">
-              <div class="trend-label">Most Consumed</div>
-              <div class="trend-value">{{ usageTrends.mostConsumed }}</div>
-              <div class="trend-sublabel">this month</div>
+              <div class="summary-row green-row">
+                <div class="label-group">
+                  <span>Items Used</span>
+                </div>
+                <span class="value green-text">{{ summary.itemsSaved }}</span>
+              </div>
             </div>
-          </div> -->
-
-          <!-- fastest category -->
-          <!-- <div class="trend-card">
-            <div class="trend-icon fast">⚡</div>
-            <div class="trend-content">
-              <div class="trend-label">Top Category</div>
-              <div class="trend-value">{{ usageTrends.fastestCategory }}</div>
-              <div class="trend-sublabel">most used</div>
-            </div>
-          </div> -->
-
-          <!-- shopping frequency -->
-          <!-- <div class="trend-card">
-            <div class="trend-icon shop">🛒</div>
-            <div class="trend-content">
-              <div class="trend-label">Shopping</div>
-              <div class="trend-value">{{ usageTrends.shoppingFrequency }}</div>
-              <div class="trend-sublabel">average</div>
-            </div>
-          </div> -->
+          </section>
         </div>
 
-        <div class="tip">
-          <span class="bulb">💡</span>
-          <p>{{ tips[0] }}</p>
+        <!-- tips -->
+        <div class="col-12 col-lg-6">
+          <section class="card fade-in h-100">
+            <h3>Tips</h3>
+            <div class="tip">
+              <span class="bulb">💡</span>
+              <p class="mb-0">{{ tips[0] }}</p>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
     </section>
   </main>
 </template>
@@ -633,19 +679,6 @@ export default {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-.grid {
-  display: grid;
-  gap: 20px;
-  grid-template-columns: 1fr;
-  margin-top: 20px;
-}
-
-@media (min-width: 800px) {
-  .grid {
-    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -730,13 +763,15 @@ h2, h3 {
   margin-bottom: 20px;
 }
 
-.metric-labels {
-  display: flex;
-  justify-content: space-between;
+.metric-label {
   font-size: 14px;
-  margin-bottom: 6px;
   font-weight: 600;
   color: #4b5563;
+}
+
+.metric-value {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .used {
@@ -775,13 +810,6 @@ h2, h3 {
   border-top: 2px solid #f3f4f6;
 }
 
-.notification-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
 .notification-title {
   font-size: 16px;
   font-weight: 700;
@@ -815,22 +843,6 @@ h2, h3 {
 .checkmark {
   font-size: 18px;
   color: #16a34a;
-}
-
-.notification-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.notification-columns:has(.notification-column:only-child) {
-  grid-template-columns: 1fr;
-}
-
-.notification-column {
-  display: flex;
-  flex-direction: column;
-  min-width: 0; 
 }
 
 .section-label {
@@ -913,13 +925,6 @@ h2, h3 {
   transform: scale(1.02);
 }
 
-.item-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
 .item-name {
   font-weight: 600;
   font-size: 13px;
@@ -972,25 +977,8 @@ h2, h3 {
   font-size: 1.3rem;
 }
 
-.radar-placeholder {
-  border: 2px dashed #d1d5db;
-  height: 180px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  color: #9ca3af;
-  background: radial-gradient(circle, rgba(255,255,255,0.9), rgba(241,245,249,0.5));
-  animation: pulseBorder 3s infinite ease-in-out;
-}
-
 .fade-in {
   animation: fadeUp 0.7s ease both;
-}
-
-.savings-display {
-  text-align: center;
-  margin-bottom: 24px;
 }
 
 .savings-amount {
@@ -1007,12 +995,6 @@ h2, h3 {
 .hint-text {
   color: #6b7280; 
   font-size: 13px;
-}
-
-.summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .summary-row {
@@ -1051,111 +1033,5 @@ h2, h3 {
 
 .green-text {
   color: #059669;
-}
-
-.trends-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.trend-card {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  transition: all 0.3s ease;
-}
-
-.trend-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #cbd5e1;
-}
-
-.trend-icon {
-  font-size: 32px;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  flex-shrink: 0;
-}
-
-.trend-icon.up {
-  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
-}
-
-.trend-icon.down {
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
-}
-
-.trend-icon.same {
-  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
-}
-
-.trend-icon.star {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-}
-
-.trend-icon.fast {
-  background: linear-gradient(135deg, #ddd6fe, #c4b5fd);
-}
-
-.trend-icon.shop {
-  background: linear-gradient(135deg, #fbcfe8, #f9a8d4);
-}
-
-.trend-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.trend-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-
-.trend-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trend-value.up-text {
-  color: #059669;
-}
-
-.trend-value.down-text {
-  color: #dc2626;
-}
-
-.trend-value.same-text {
-  color: #6366f1;
-}
-
-.trend-sublabel {
-  font-size: 10px;
-  color: #94a3b8;
-}
-
-@media (max-width: 600px) {
-  .trends-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
