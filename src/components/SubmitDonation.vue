@@ -2,6 +2,8 @@
   import { ref, onMounted , watch} from 'vue'
   import { createClient } from '@supabase/supabase-js'
   import { useRoute, useRouter } from 'vue-router'
+  
+
 
   // connection to supabase
   const SUPABASE_URL = 'https://mtaoplgrwgihghbdzquk.supabase.co'
@@ -14,6 +16,8 @@
   const session = ref(null)
   const inventory = ref([])
   const selectedItem = ref(null)
+  const toasts = ref([])
+  let nextId = 1
 
 
   // hold input data from donation form 
@@ -218,7 +222,23 @@
     }
     isLoadingPins.value = false
   }
+  // creating alert box with design
+  function notify(msg, opts = {}) {
+  const type = String(opts.type ?? 'info').trim().toLowerCase()
+  const id = nextId++
+  toasts.value.push({
+    id,
+    msg,
+    title: opts.title ?? (type === 'success' ? 'Success' : 'Notice'),
+    type,
+    isSuccess: type === 'success'
+  })
+}
 
+// close the toast notification
+function dismiss(id) {
+  toasts.value = toasts.value.filter(t => t.id !== id)
+}
 
   const submitDonation = async () => {
     try {
@@ -226,25 +246,27 @@
 
       // --- Validation ---
       if (!form.value.address?.trim()) {
-        alert('Please enter your address before submitting your donation.')
+      notify('Please enter your address before submitting your donation.', { type:'danger', title:'Address required' })
+
         isSubmitting.value = false
         return
       }
 
       if (!form.value.expiry_date?.trim()) {
-        alert('Please enter an expiry date before submitting your donation.')
+        notify('Please enter an expiry date before submitting your donation.', { type:'danger', title:'Expiry date required' })
         isSubmitting.value = false
         return
       }
 
       if (!form.value.category) {
-        alert('Please select a category.')
+        notify('Please select a category.', { type:'danger', title:'Category required' })
+
         isSubmitting.value = false
         return
       }
 
       if (!form.value.unit) {
-        alert('Please select a unit for the food.')
+        notify('Please select a unit for the food.', { type:'danger', title:'Unit required' })
         isSubmitting.value = false
         return
       }
@@ -255,9 +277,10 @@
           (b) => b.expiry_date === form.value.expiry_date
         )
         if (batch && form.value.quantity > batch.quantity) {
-          alert(
-            `You only have ${batch.quantity} ${form.value.unit} of ${form.value.item_name} available in your inventory. Please enter a smaller amount.`
-          )
+          notify(
+          `You only have ${batch.quantity} ${form.value.unit} of ${form.value.item_name} available in your inventory. Please enter a smaller amount.`,
+          { type:'warning', title:'Quantity exceeds available' }
+        )
           isSubmitting.value = false
           return
         }
@@ -315,16 +338,10 @@
       await fetchDonations()
       await renderPins()
 
-      alertType.value = 'success'
-      alertMsg.value = 'Donation submitted successfully!'
 
-      // Optional: return to inventory page
-      setTimeout(() => router.push('/Inventory'), 1500)
 
     } catch (err) {
       console.error('Error submitting donation:', err?.message || err)
-      alertType.value = 'danger'
-      alertMsg.value = 'Failed to submit donation. Please try again.'
     } finally {
       isSubmitting.value = false
     }
@@ -375,17 +392,6 @@
       const donationIndex = donations.value.findIndex(d => d.id === donationId)
       const donation = donations.value.find(d => d.id === donationId)
 
-      if (donationIndex === -1) {
-        alert('Donation not found')
-        return
-      }
-
-      // Ensure user has a householdId
-      if (!householdId.value) {
-        alert('You need a household to request donations.')
-        return
-      }
-
       //  Add ingredient (if not already exists)
       const { data: existingIngredient } = await supabase
         .from('ingredients')
@@ -394,7 +400,7 @@
         .eq('name', donation.Item_Name)
         .eq('unit', donation.Unit)
         .limit(1)
-        .single()
+        .maybeSingle()
 
       let ingredientId
 
@@ -410,7 +416,8 @@
             unit: donation.Unit
           }])
           .select()
-          .single()
+          .maybeSingle()
+
 
         if (ingredientError) throw ingredientError
         ingredientId = newIngredient.id
@@ -423,7 +430,8 @@
         .eq('ingredient_id', ingredientId)
         .eq('expiry_date', donation.Expiry_Date)
         .limit(1)
-        .single()
+        .maybeSingle()
+
 
       if (batchError && !existingBatch) {
         throw batchError
@@ -445,11 +453,9 @@
             quantity: donation.Item_Quan,
             expiry_date: donation.Expiry_Date
           }])
-        if (insertError) throw insertError
+        if (insertError) {throw insertError}
       }
-
-
-    // Mark donation as claimed
+      // Mark donation as claimed
       const { error: claimError } = await supabase
         .from('donation_submissions')
         .update({ Claimed: true })
@@ -459,16 +465,43 @@
 
       donations.value.splice(donationIndex, 1)
 
-      alert(`Donation '${donation.Item_Name}' added to your inventory!`)
+      notify(`Donation '${donation.Item_Name}' added to your inventory!`, { type:'success', title:'Success' })
+
+
 
     } catch (err) {
       console.error(err)
-      alert('Failed to request donation. Please try again.')
     }
   }
 </script>
 
 <template>
+<!-- toast -->
+<div class="position-fixed top-50 start-50 translate-middle p-3" style="z-index:1080; width:min(92vw,460px)">
+  <transition-group name="toast">
+    <div v-for="t in toasts" :key="t.id"
+      class="d-flex align-items-start shadow-lg rounded-4 mb-2 p-3 bg-white">
+      
+      <!-- Icon circle with conditional styling -->
+   <div class="rounded-circle d-flex align-items-center justify-content-center"
+     :class="((t.type || '').toLowerCase() === 'success') ? 'bg-success' : 'bg-danger'"
+     style="width:36px;height:36px;flex-shrink:0;">
+  <span v-if="((t.type || '').toLowerCase() === 'success')"
+        class="text-white fw-bold toast-glyph">✓</span>
+  <span v-else
+        class="text-white fw-bold toast-glyph">×</span>
+
+      </div>
+      <div class="flex-grow-1 pe-2">
+        <strong class="d-block mb-1">{{ t.title }}</strong>
+        <div>{{ t.msg }}</div>
+      </div>
+      <button class="btn btn-sm btn-link text-secondary text-decoration-none"
+              @click="dismiss(t.id)" aria-label="Close">✕</button>
+    </div>
+  </transition-group>
+</div>
+
   <div class="container py-4">
     <h1 class="h3 mb-3">Community Food Sharing</h1>
 
