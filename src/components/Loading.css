@@ -12,7 +12,7 @@
     position: relative;
     color: #ffffff;
     padding: 4rem 1.25rem 3rem;
-    background: radial-gradient(1200px 600px at 50% -20%, #22c55e 0%, #16a34a 40%, #0d5f2b 100%);
+    background: #2e7d32;
     overflow: hidden;
     text-align: center;
 }
@@ -75,7 +75,7 @@
 /* CTA Button */
 .btn-cta {
     /* override Bootstrap defaults */
-    background: linear-gradient(135deg, #22c55e, #15803d) !important;
+    background: #2e7d32 !important;
     color: #fff !important;
     border: none !important;
 
