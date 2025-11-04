@@ -244,7 +244,7 @@
       }
 
       if (!form.value.unit) {
-        alert('Please select a unit.')
+        alert('Please select a unit for the food.')
         isSubmitting.value = false
         return
       }
