@@ -2,8 +2,10 @@
 import { RouterLink, RouterView, useRouter } from "vue-router";
 import { createClient } from "@supabase/supabase-js";
 import { ref, onMounted } from "vue";
+import { useUserStore } from "@/stores/userStore.js";
+import { storeToRefs } from "pinia"; // ✅ added
 
-// Initialize Supabase client
+// ✅ Initialize Supabase
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -14,10 +16,12 @@ const router = useRouter();
 const session = ref(null);
 const showMenu = ref(false);
 const activeProfileId = ref(null);
-const avatarUrl = ref("/avatars/default.png"); // 🌿 Default avatar
-const originalAvatar = ref("/avatars/default.png"); // used to restore on cancel
 
-// Fetch active profile (with avatar)
+// ✅ Global Pinia store (reactive binding)
+const userStore = useUserStore();
+const { avatar } = storeToRefs(userStore); // reactive ref (instead of static value)
+
+// ✅ Fetch active profile (to set initial avatar)
 const fetchActiveProfile = async () => {
   if (!session.value) return;
 
@@ -33,114 +37,63 @@ const fetchActiveProfile = async () => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, avatar_url")
     .eq("household_id", householdId)
     .eq("is_active", true)
     .maybeSingle();
 
+  if (profile?.avatar_url) userStore.setAvatar(profile.avatar_url);
   activeProfileId.value = profile?.id || null;
-
-  const newAvatar = profile?.avatar_url
-    ? `/avatars/${profile.avatar_url}`
-    : "/avatars/default.png";
-
-  avatarUrl.value = newAvatar;
-  originalAvatar.value = newAvatar; // store to revert if needed
 };
 
-// Check user session on mount
+// ✅ Lifecycle
 onMounted(async () => {
+  // Preload avatar from localStorage to avoid default flash
+  const storedAvatar = localStorage.getItem("userAvatar");
+  if (storedAvatar) userStore.setAvatar(storedAvatar);
+
   const { data: { session: s } } = await supabase.auth.getSession();
   session.value = s;
 
   if (session.value) await fetchActiveProfile();
 
-  // Auth change watcher
   supabase.auth.onAuthStateChange((_event, sess) => {
     session.value = sess;
-    if (sess) {
-      fetchActiveProfile();
-    } else {
-      // ✅ Automatically redirect guest back to Loading
-      router.push("/Loading");
-    }
-  });
-
-  // 🔹 Listen for active profile changes
-  window.addEventListener("activeProfileChanged", (e) => {
-    activeProfileId.value = e.detail?.newActiveId || null;
-  });
-
-  // 🔹 Listen for avatar PREVIEW (temporary, before saving)
-  window.addEventListener("avatarPreview", (e) => {
-    avatarUrl.value = e.detail?.newAvatarUrl
-      ? `/avatars/${e.detail.newAvatarUrl}`
-      : "/avatars/default.png";
-  });
-
-  // 🔹 Listen for avatar UPDATED (permanent save)
-  window.addEventListener("avatarUpdated", (e) => {
-    const newUrl = e.detail?.newAvatarUrl
-      ? `/avatars/${e.detail.newAvatarUrl}`
-      : "/avatars/default.png";
-    avatarUrl.value = newUrl;
-    originalAvatar.value = newUrl; // update base avatar
-  });
-
-  // 🔹 Listen for avatar CANCEL (restore to original)
-  window.addEventListener("avatarCancel", () => {
-    avatarUrl.value = originalAvatar.value;
+    if (sess) fetchActiveProfile();
+    else router.push("/Loading");
   });
 });
 
-// Logout logic
+// ✅ Logout
 const logout = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user && activeProfileId.value) {
-      const { error: updateError } = await supabase
+      await supabase
         .from("profiles")
         .update({ is_active: false })
         .eq("id", activeProfileId.value);
-
-      if (updateError) throw updateError;
     }
 
     await supabase.auth.signOut();
-
-    // Clear session-related state
     session.value = null;
     activeProfileId.value = null;
     showMenu.value = false;
-    avatarUrl.value = "/avatars/default.png";
-    originalAvatar.value = "/avatars/default.png";
 
-    // Redirect after logout
+    userStore.setAvatar("default.png");
     router.replace("/Loading");
   } catch (error) {
     console.error("Logout failed:", error.message);
   }
 };
 
-// Navigation
+// ✅ Navigation helpers
 const goTo = (path) => {
   showMenu.value = false;
   router.push(path);
 };
-
-const goToProfileSettings = () => {
-  if (!activeProfileId.value) {
-    alert("No active profile found.");
-    return;
-  }
-  router.push(`/ProfileEdit/${activeProfileId.value}`);
-};
-
-// Toggle dropdown
-const toggleMenu = () => {
-  showMenu.value = !showMenu.value;
-};
+const toggleMenu = () => (showMenu.value = !showMenu.value);
 </script>
 
 <template>
@@ -153,8 +106,15 @@ const toggleMenu = () => {
       </RouterLink>
 
       <!-- Toggler for mobile -->
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-        aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
         <span class="navbar-toggler-icon"></span>
       </button>
 
@@ -189,19 +149,21 @@ const toggleMenu = () => {
             </li>
           </template>
 
-          <!-- User dropdown -->
+          <!-- 👤 User dropdown -->
           <li v-if="session" class="nav-item dropdown position-relative">
-            <img :src="avatarUrl" alt="User Avatar" class="user-icon" @click="toggleMenu" />
-            <ul v-show="showMenu"
-              class="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-sm border-0">
+            <img
+              :src="avatar"
+              alt="User Avatar"
+              class="user-icon"
+              @click="toggleMenu"
+            />
+            <ul
+              v-show="showMenu"
+              class="dropdown-menu dropdown-menu-end show position-absolute mt-2 shadow-sm border-0"
+            >
               <li>
                 <button class="dropdown-item" @click="goTo('/ProfileList')">
-                  👤 Manage Profiles
-                </button>
-              </li>
-              <li>
-                <button class="dropdown-item" @click="goToProfileSettings">
-                  ⚙️ Settings
+                  View Profiles
                 </button>
               </li>
               <li>
@@ -209,7 +171,7 @@ const toggleMenu = () => {
               </li>
               <li>
                 <button class="dropdown-item text-danger" @click="logout">
-                  🚪 Logout
+                  Logout
                 </button>
               </li>
             </ul>
@@ -222,6 +184,7 @@ const toggleMenu = () => {
   <!-- Page Content -->
   <RouterView />
 </template>
+
 
 <style scoped>
 .eco-brand {
@@ -258,7 +221,7 @@ const toggleMenu = () => {
   transform: scale(1.1);
 }
 
-/* Dropdown styling */
+/* Dropdown menu */
 .dropdown-menu {
   right: 0;
   left: auto;
