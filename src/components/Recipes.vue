@@ -2787,13 +2787,11 @@ button.btn-sidebar {
 }
 
 .confirmation-header-new {
-    display: grid;
-    gap: clamp(15px, 4vw, 30px);
-    padding: clamp(20px, 4vw, 30px);
-    background: linear-gradient(135deg, var(--bg-light) 0%, var(--bg-white) 100%);
-    border-bottom: 1px solid var(--border-color);
-    flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  align-items: stretch; /* ✅ ensures both top-align */
 }
+
 
 /* XS-SM: Stack vertically */
 @media (max-width: 599px) {
@@ -2835,10 +2833,10 @@ button.btn-sidebar {
 }
 
 .confirmation-info-right {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: clamp(10px, 2vw, 12px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start; /* ✅ not center */
+  gap: 12px;
 }
 
 .confirmation-badges-top {
