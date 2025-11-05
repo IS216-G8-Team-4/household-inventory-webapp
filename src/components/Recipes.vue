@@ -1693,6 +1693,7 @@ export default {
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
     --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.25);
+    --navbar-height: 70px;;
     
     /* Breakpoints (for reference - used in media queries) */
     /* xs: 0px - 479px */
@@ -2240,6 +2241,8 @@ export default {
     align-items: center;
     z-index: 1000;
     padding: clamp(10px, 3vw, 20px);
+    /* CHANGED: Added padding-top to account for navbar */
+    padding-top: calc(var(--navbar-height) + 10px);
     overflow-y: auto;
     backdrop-filter: blur(5px);
 }
@@ -2248,11 +2251,14 @@ export default {
     background: var(--bg-white);
     border-radius: var(--radius-lg);
     width: min(1200px, 95vw);
-    max-height: min(90vh, 900px);
+    /* CHANGED: Adjusted max-height to account for navbar */
+    max-height: calc(90vh - var(--navbar-height));
     overflow-y: auto;
     position: relative;
     box-shadow: var(--shadow-xl);
     animation: modalSlideIn var(--transition-normal) ease-out;
+    /* CHANGED: Added margin for better spacing */
+    margin: auto 0;
 }
 
 @keyframes modalSlideIn {
@@ -2420,13 +2426,19 @@ export default {
     line-height: 1.4;
 }
 
+/* ============================================
+   BUTTON ALIGNMENT FIX - ISSUE #1
+   ============================================ */
 .recipe-modal-actions-sidebar {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+    /* ADDED: Ensure proper width */
+    width: 100%;
 }
 
 .btn-sidebar {
+    /* CHANGED: Explicit width for alignment */
     width: 100%;
     min-height: 48px;
     padding: clamp(12px, 2.5vw, 14px) clamp(20px, 4vw, 24px);
@@ -2440,8 +2452,18 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 10px;  /* ✅ Using gap instead of margin-right */
     text-decoration: none;
+    /* ADDED: Prevent text wrapping issues */
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.btn-icon-svg {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    /* REMOVED: margin-right as gap handles spacing */
 }
 
 .btn-sidebar.btn-danger {
@@ -2513,7 +2535,8 @@ export default {
 /* Responsive scrollable height */
 @media (min-width: 1024px) {
     .recipe-scrollable-content {
-        max-height: calc(100vh - 350px);
+        /* CHANGED: Account for navbar */
+        max-height: calc(100vh - var(--navbar-height) - 350px);
         min-height: 450px;
     }
 }
@@ -2633,7 +2656,8 @@ export default {
    ============================================ */
 .use-recipe-modal-new {
     max-width: min(850px, 95vw);
-    max-height: 90vh;
+    /* CHANGED: Better max-height calculation */
+    max-height: calc(90vh - var(--navbar-height) - 20px);
     border-radius: var(--radius-lg);
     overflow: hidden;
     display: flex;
@@ -2644,7 +2668,8 @@ export default {
     padding: 0;
     display: flex;
     flex-direction: column;
-    max-height: 90vh;
+    /* CHANGED: Better height management */
+    max-height: calc(90vh - var(--navbar-height) - 20px);
     overflow: hidden;
 }
 
@@ -2790,11 +2815,47 @@ export default {
 .stat-value.match-low { color: var(--danger); }
 .stat-value.expiring-stat { color: #ff6b6b; }
 
+/* CHANGED: Better scrolling for ingredients section - ISSUE #3 */
 .ingredients-section-redesign {
     padding: clamp(20px, 4vw, 30px);
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    /* ADDED: Better height management for different screens */
+    max-height: calc(90vh - var(--navbar-height) - 400px);
+}
+
+/* Responsive height adjustments */
+@media (max-height: 800px) {
+    .ingredients-section-redesign {
+        max-height: calc(90vh - var(--navbar-height) - 350px);
+    }
+}
+
+@media (max-height: 650px) {
+    .ingredients-section-redesign {
+        max-height: calc(90vh - var(--navbar-height) - 300px);
+    }
+}
+
+@media (max-width: 599px) {
+    .ingredients-section-redesign {
+        max-height: calc(90vh - var(--navbar-height) - 450px);
+    }
+}
+
+/* CHANGED: Better positioning for action buttons - ISSUE #3 */
+.modal-actions-redesign {
+    display: flex;
+    gap: clamp(10px, 2vw, 12px);
+    padding: clamp(15px, 3vw, 20px) clamp(20px, 4vw, 30px);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-light);
+    flex-shrink: 0;
+    /* ADDED: Ensure buttons are always visible */
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
 }
 
 .ingredients-section-redesign::-webkit-scrollbar {
@@ -3025,15 +3086,6 @@ export default {
 .unit-warning {
     font-size: 1.2em;
     cursor: help;
-}
-
-.modal-actions-redesign {
-    display: flex;
-    gap: clamp(10px, 2vw, 12px);
-    padding: clamp(15px, 3vw, 20px) clamp(20px, 4vw, 30px);
-    border-top: 1px solid var(--border-color);
-    background: var(--bg-light);
-    flex-shrink: 0;
 }
 
 @media (max-width: 599px) {
@@ -3347,7 +3399,8 @@ export default {
 /* Desktop positioning */
 @media (min-width: 768px) {
     .success-notification-top {
-        top: 20px;
+        /* CHANGED: Account for navbar */
+        top: calc(var(--navbar-height) + 20px);
         left: 50%;
         transform: translateX(-50%);
         max-width: 500px;
@@ -3358,7 +3411,8 @@ export default {
 /* Mobile positioning */
 @media (max-width: 767px) {
     .success-notification-top {
-        top: 10px;
+        /* CHANGED: Account for navbar */
+        top: calc(var(--navbar-height) + 10px);
         left: 10px;
         right: 10px;
         transform: none;
@@ -3775,6 +3829,8 @@ export default {
    ============================================ */
 .how-it-works-modal {
     max-width: min(900px, 95vw);
+    /* CHANGED: Account for navbar */
+    max-height: calc(90vh - var(--navbar-height) - 20px);
     padding: 0;
     animation: modalSlideIn var(--transition-normal) ease-out;
 }
