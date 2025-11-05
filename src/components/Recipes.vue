@@ -2787,9 +2787,12 @@ button.btn-sidebar {
 }
 
 .confirmation-header-new {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  align-items: stretch; /* ✅ ensures both top-align */
+    display: grid;
+    gap: clamp(15px, 4vw, 30px);
+    padding: clamp(20px, 4vw, 30px);
+    background: linear-gradient(135deg, var(--bg-light) 0%, var(--bg-white) 100%);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 
