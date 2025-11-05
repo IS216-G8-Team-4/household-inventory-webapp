@@ -37,7 +37,7 @@ const fetchActiveProfile = async () => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, avatar_url")
+    .select("id")
     .eq("household_id", householdId)
     .eq("is_active", true)
     .maybeSingle();
