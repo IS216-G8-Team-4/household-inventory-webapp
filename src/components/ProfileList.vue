@@ -373,6 +373,7 @@ export default {
   font-size: 0.95rem;
   position: relative;
   z-index: 1;
+  color: white;
 }
 
 /* Empty State */
