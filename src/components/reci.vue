@@ -1234,6 +1234,7 @@ export default {
                         </div>
                         
                         <!-- ACTION BUTTONS -->
+                        <!-- ACTION BUTTONS -->
                         <div class="recipe-modal-actions-sidebar">
                             <a v-if="selectedRecipe.strYoutube" 
                             :href="selectedRecipe.strYoutube" 
@@ -2381,38 +2382,27 @@ export default {
 
 .recipe-detail-left {
     background: var(--bg-light);
-    padding: clamp(15px, 3vw, 20px) clamp(15px, 3vw, 20px) clamp(20px, 4vw, 30px);    display: flex;
+    padding: clamp(15px, 3vw, 20px);
+    display: flex;
     flex-direction: column;
     gap: clamp(10px, 2vw, 14px);
     align-items: stretch;
     overflow-y: auto;
-    min-width: 0;
-    overflow-x: hidden;
+    min-width: 0;  /* ✅ Allows flex item to shrink below content size */
 }
 
 /* ✅ Responsive layout for left sidebar */
 @media (max-width: 767px) {
     .recipe-detail-left {
-        max-height: calc(90vh - var(--navbar-height) - 200px);
+        max-height: 60vh;  /* ✅ Prevents cutting off on mobile */
         overflow-y: auto;
-        padding: clamp(12px, 2.5vw, 15px) clamp(12px, 2.5vw, 15px) clamp(20px, 4vw, 25px); /* CHANGED: Match bottom padding */
     }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
     .recipe-detail-left {
-        min-width: 220px;
-        max-width: 260px;
-        overflow-y: auto;
-        max-height: calc(90vh - var(--navbar-height) - 100px);
-        padding: clamp(15px, 3vw, 20px) clamp(15px, 3vw, 20px) clamp(20px, 4vw, 25px); /* ADDED: Match bottom padding */
-    }
-}
-
-@media (min-width: 1024px) {
-    .recipe-detail-left {
-        max-height: calc(90vh - var(--navbar-height) - 100px);
-        padding: clamp(20px, 4vw, 25px) clamp(20px, 4vw, 25px) clamp(25px, 5vw, 30px); /* ADDED: Match bottom padding */
+        min-width: 250px;  /* ✅ Ensures minimum width on tablets */
+        max-width: 280px;
     }
 }
 
@@ -2440,69 +2430,33 @@ export default {
 
 .btn-sidebar {
     width: 100%;
-    height: 52px; /* FIXED HEIGHT */
-    padding: 0 20px; /* HORIZONTAL PADDING ONLY */
+    min-height: 48px;
+    padding: clamp(12px, 2.5vw, 14px) clamp(20px, 4vw, 24px);
     border-radius: var(--radius-md);
     text-align: center;
     font-weight: 600;
-    font-size: 15px;
+    font-size: clamp(0.9em, 2vw, 0.95em);
     border: none;
     cursor: pointer;
     transition: all var(--transition-normal);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px; /* REDUCED GAP */
+    gap: 10px;
     text-decoration: none;
+    white-space: nowrap;
     box-sizing: border-box;
-    line-height: 1;
 }
 
-/* Responsive padding for smaller screens */
-@media (max-width: 767px) {
-    .btn-sidebar {
-        height: 48px;
-        padding: 0 16px;
-        font-size: 14px;
-    }
-}
-
-/* ✅ Icon sizing - perfectly aligned */
+/* ✅ SINGLE definition for btn-icon-svg - NO margin-right */
 .btn-icon-svg {
-    width: 18px; /* REDUCED FROM 20px */
-    height: 18px;
+    width: 22px;
+    height: 22px;
     flex-shrink: 0;
 }
-/* Unify <a> and <button> visual baseline */
-a.btn-sidebar,
-button.btn-sidebar {
-    all: unset; /* Removes browser default styles */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 52px;
-    padding: 0 20px;
-    border-radius: var(--radius-md);
-    text-align: center;
-    font-weight: 600;
-    font-size: 15px;
-    cursor: pointer;
-    transition: all var(--transition-normal);
-    gap: 8px;
-    text-decoration: none;
-    box-sizing: border-box;
-    line-height: 1;
-}
 
-/* Reapply color/background separately for clarity */
 .btn-sidebar.btn-danger {
     background: #e52d27;
-    color: white;
-}
-
-.btn-sidebar.btn-success {
-    background: var(--success);
     color: white;
 }
 
@@ -2512,15 +2466,21 @@ button.btn-sidebar {
     box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
 }
 
+.btn-sidebar.btn-success {
+    background: var(--success);
+    color: white;
+}
+
 .btn-sidebar.btn-success:hover {
     background: #218838;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
 }
 
-/* Remove any extra span styling that might affect alignment */
+/* ✅ Keep span styling but ensure proper alignment */
 .btn-sidebar span {
-    display: inline;
+    display: flex;
+    align-items: center;
     line-height: 1;
 }
 
@@ -2618,45 +2578,23 @@ button.btn-sidebar {
 
 .recipe-scrollable-content {
     flex: 1;
-    padding: clamp(15px, 3vw, 25px) clamp(15px, 3vw, 30px) clamp(20px, 4vw, 30px);
+    padding: clamp(20px, 4vw, 25px) clamp(20px, 4vw, 30px) clamp(25px, 5vw, 30px);
     overflow-y: auto;
-    overflow-x: hidden; /* ADDED: Prevent horizontal overflow */
     min-height: 0;
-    word-wrap: break-word; /* ADDED: Prevent text overflow */
 }
 
 /* Responsive scrollable height */
-@media (max-width: 767px) {
-    .recipe-scrollable-content {
-        max-height: calc(90vh - var(--navbar-height) - 250px); /* ADDED: Mobile height limit */
-        padding: clamp(12px, 2.5vw, 15px); /* ADDED: Reduced padding on mobile */
-    }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-    .recipe-scrollable-content {
-        max-height: calc(90vh - var(--navbar-height) - 300px); /* ADDED: Tablet height limit */
-    }
-}
-
 @media (min-width: 1024px) {
     .recipe-scrollable-content {
-        max-height: calc(90vh - var(--navbar-height) - 350px);
-        min-height: 400px; /* CHANGED: Reduced from 450px */
+        /* CHANGED: Account for navbar */
+        max-height: calc(100vh - var(--navbar-height) - 350px);
+        min-height: 450px;
     }
 }
 
 @media (max-height: 700px) {
     .recipe-scrollable-content {
-        max-height: calc(90vh - var(--navbar-height) - 200px); /* CHANGED: Better calculation */
-        min-height: 300px; /* ADDED: Minimum height for very short screens */
-    }
-}
-
-@media (max-height: 600px) {
-    .recipe-scrollable-content {
-        max-height: calc(90vh - var(--navbar-height) - 150px); /* ADDED: Extra small height handling */
-        min-height: 250px;
+        max-height: 50vh;
     }
 }
 
