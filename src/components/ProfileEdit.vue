@@ -432,6 +432,7 @@ export default {
 .subtitle {
   opacity: 0.9;
   font-size: 0.95rem;
+  color: white;
 }
 
 .profile-form {

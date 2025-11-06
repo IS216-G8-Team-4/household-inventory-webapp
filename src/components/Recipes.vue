@@ -404,8 +404,14 @@ export default {
                 )
             }
             
+            // Max Time Filter
             if (this.filters.maxTime) {
-                // Placeholder for time filter
+                const maxMinutes = parseInt(this.filters.maxTime)
+                filtered = filtered.filter(recipe => {
+                    // Extract cooking time from instructions or use a default estimation
+                    const cookingTime = this.estimateCookingTime(recipe)
+                    return cookingTime <= maxMinutes
+                })
             }
             
             if (this.filters.useExpiringOnly) {
@@ -415,6 +421,46 @@ export default {
             }
             
             this.filteredRecipes = filtered
+        },
+        estimateCookingTime(recipe) {
+            // Try to extract time from instructions
+            const instructions = recipe.strInstructions?.toLowerCase() || ''
+            
+            // Look for time patterns like "30 minutes", "1 hour", "45 mins"
+            const timePatterns = [
+                /(\d+)\s*(?:hour|hr|hours|hrs)/gi,
+                /(\d+)\s*(?:minute|min|minutes|mins)/gi
+            ]
+            
+            let totalMinutes = 0
+            let foundTime = false
+            
+            // Extract hours
+            const hourMatch = instructions.match(timePatterns[0])
+            if (hourMatch) {
+                const hours = parseInt(hourMatch[0].match(/\d+/)[0])
+                totalMinutes += hours * 60
+                foundTime = true
+            }
+            
+            // Extract minutes
+            const minuteMatch = instructions.match(timePatterns[1])
+            if (minuteMatch) {
+                const minutes = parseInt(minuteMatch[0].match(/\d+/)[0])
+                totalMinutes += minutes
+                foundTime = true
+            }
+            
+            // If no time found, estimate based on category
+            if (!foundTime) {
+                const category = recipe.strCategory?.toLowerCase() || ''
+                if (category.includes('dessert')) return 45
+                if (category.includes('starter') || category.includes('side')) return 20
+                if (category.includes('breakfast')) return 15
+                return 30  // Default estimation
+            }
+            
+            return totalMinutes
         },
         
         clearFilters() {
@@ -1188,7 +1234,6 @@ export default {
                         </div>
                         
                         <!-- ACTION BUTTONS -->
-                        <!-- ACTION BUTTONS -->
                         <div class="recipe-modal-actions-sidebar">
                             <a v-if="selectedRecipe.strYoutube" 
                             :href="selectedRecipe.strYoutube" 
@@ -1693,6 +1738,7 @@ export default {
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
     --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.25);
+    --navbar-height: 70px;;
     
     /* Breakpoints (for reference - used in media queries) */
     /* xs: 0px - 479px */
@@ -2240,6 +2286,8 @@ export default {
     align-items: center;
     z-index: 1000;
     padding: clamp(10px, 3vw, 20px);
+    /* CHANGED: Added padding-top to account for navbar */
+    padding-top: calc(var(--navbar-height) + 10px);
     overflow-y: auto;
     backdrop-filter: blur(5px);
 }
@@ -2248,11 +2296,14 @@ export default {
     background: var(--bg-white);
     border-radius: var(--radius-lg);
     width: min(1200px, 95vw);
-    max-height: min(90vh, 900px);
+    /* CHANGED: Adjusted max-height to account for navbar */
+    max-height: calc(90vh - var(--navbar-height));
     overflow-y: auto;
     position: relative;
     box-shadow: var(--shadow-xl);
     animation: modalSlideIn var(--transition-normal) ease-out;
+    /* CHANGED: Added margin for better spacing */
+    margin: auto 0;
 }
 
 @keyframes modalSlideIn {
@@ -2330,12 +2381,39 @@ export default {
 
 .recipe-detail-left {
     background: var(--bg-light);
-    padding: clamp(15px, 3vw, 20px);
-    display: flex;
+    padding: clamp(15px, 3vw, 20px) clamp(15px, 3vw, 20px) clamp(20px, 4vw, 30px);    display: flex;
     flex-direction: column;
     gap: clamp(10px, 2vw, 14px);
     align-items: stretch;
     overflow-y: auto;
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+/* ✅ Responsive layout for left sidebar */
+@media (max-width: 767px) {
+    .recipe-detail-left {
+        max-height: calc(90vh - var(--navbar-height) - 200px);
+        overflow-y: auto;
+        padding: clamp(12px, 2.5vw, 15px) clamp(12px, 2.5vw, 15px) clamp(20px, 4vw, 25px); /* CHANGED: Match bottom padding */
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .recipe-detail-left {
+        min-width: 220px;
+        max-width: 260px;
+        overflow-y: auto;
+        max-height: calc(90vh - var(--navbar-height) - 100px);
+        padding: clamp(15px, 3vw, 20px) clamp(15px, 3vw, 20px) clamp(20px, 4vw, 25px); /* ADDED: Match bottom padding */
+    }
+}
+
+@media (min-width: 1024px) {
+    .recipe-detail-left {
+        max-height: calc(90vh - var(--navbar-height) - 100px);
+        padding: clamp(20px, 4vw, 25px) clamp(20px, 4vw, 25px) clamp(25px, 5vw, 30px); /* ADDED: Match bottom padding */
+    }
 }
 
 .recipe-image-wrapper {
@@ -2351,6 +2429,99 @@ export default {
     height: clamp(200px, 30vw, 250px);
     object-fit: cover;
     display: block;
+}
+
+.recipe-modal-actions-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    width: 100%;
+}
+
+.btn-sidebar {
+    width: 100%;
+    height: 52px; /* FIXED HEIGHT */
+    padding: 0 20px; /* HORIZONTAL PADDING ONLY */
+    border-radius: var(--radius-md);
+    text-align: center;
+    font-weight: 600;
+    font-size: 15px;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* REDUCED GAP */
+    text-decoration: none;
+    box-sizing: border-box;
+    line-height: 1;
+}
+
+/* Responsive padding for smaller screens */
+@media (max-width: 767px) {
+    .btn-sidebar {
+        height: 48px;
+        padding: 0 16px;
+        font-size: 14px;
+    }
+}
+
+/* ✅ Icon sizing - perfectly aligned */
+.btn-icon-svg {
+    width: 18px; /* REDUCED FROM 20px */
+    height: 18px;
+    flex-shrink: 0;
+}
+/* Unify <a> and <button> visual baseline */
+a.btn-sidebar,
+button.btn-sidebar {
+    all: unset; /* Removes browser default styles */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 52px;
+    padding: 0 20px;
+    border-radius: var(--radius-md);
+    text-align: center;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    gap: 8px;
+    text-decoration: none;
+    box-sizing: border-box;
+    line-height: 1;
+}
+
+/* Reapply color/background separately for clarity */
+.btn-sidebar.btn-danger {
+    background: #e52d27;
+    color: white;
+}
+
+.btn-sidebar.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+.btn-sidebar.btn-danger:hover {
+    background: #c9221c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
+}
+
+.btn-sidebar.btn-success:hover {
+    background: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+/* Remove any extra span styling that might affect alignment */
+.btn-sidebar span {
+    display: inline;
+    line-height: 1;
 }
 
 .match-card {
@@ -2420,64 +2591,6 @@ export default {
     line-height: 1.4;
 }
 
-.recipe-modal-actions-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-}
-
-.btn-sidebar {
-    width: 100%;
-    min-height: 48px;
-    padding: clamp(12px, 2.5vw, 14px) clamp(20px, 4vw, 24px);
-    border-radius: var(--radius-md);
-    text-align: center;
-    font-weight: 600;
-    font-size: clamp(0.9em, 2vw, 0.95em);
-    border: none;
-    cursor: pointer;
-    transition: all var(--transition-normal);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    text-decoration: none;
-}
-
-.btn-sidebar.btn-danger {
-    background: #e52d27;
-    color: white;
-}
-
-.btn-sidebar.btn-danger:hover {
-    background: #c9221c;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(229, 45, 39, 0.4);
-}
-
-.btn-sidebar.btn-success {
-    background: var(--success);
-    color: white;
-}
-
-.btn-sidebar.btn-success:hover {
-    background: #218838;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
-}
-
-.btn-icon-svg {
-    width: 22px;
-    height: 22px;
-    flex-shrink: 0;
-    margin-right: 2px;
-}
-
-.btn-sidebar span {
-    display: inline-block;
-    line-height: 1;
-}
-
 .recipe-detail-right {
     background: white;
     display: flex;
@@ -2505,22 +2618,45 @@ export default {
 
 .recipe-scrollable-content {
     flex: 1;
-    padding: clamp(20px, 4vw, 25px) clamp(20px, 4vw, 30px) clamp(25px, 5vw, 30px);
+    padding: clamp(15px, 3vw, 25px) clamp(15px, 3vw, 30px) clamp(20px, 4vw, 30px);
     overflow-y: auto;
+    overflow-x: hidden; /* ADDED: Prevent horizontal overflow */
     min-height: 0;
+    word-wrap: break-word; /* ADDED: Prevent text overflow */
 }
 
 /* Responsive scrollable height */
+@media (max-width: 767px) {
+    .recipe-scrollable-content {
+        max-height: calc(90vh - var(--navbar-height) - 250px); /* ADDED: Mobile height limit */
+        padding: clamp(12px, 2.5vw, 15px); /* ADDED: Reduced padding on mobile */
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .recipe-scrollable-content {
+        max-height: calc(90vh - var(--navbar-height) - 300px); /* ADDED: Tablet height limit */
+    }
+}
+
 @media (min-width: 1024px) {
     .recipe-scrollable-content {
-        max-height: calc(100vh - 350px);
-        min-height: 450px;
+        max-height: calc(90vh - var(--navbar-height) - 350px);
+        min-height: 400px; /* CHANGED: Reduced from 450px */
     }
 }
 
 @media (max-height: 700px) {
     .recipe-scrollable-content {
-        max-height: 50vh;
+        max-height: calc(90vh - var(--navbar-height) - 200px); /* CHANGED: Better calculation */
+        min-height: 300px; /* ADDED: Minimum height for very short screens */
+    }
+}
+
+@media (max-height: 600px) {
+    .recipe-scrollable-content {
+        max-height: calc(90vh - var(--navbar-height) - 150px); /* ADDED: Extra small height handling */
+        min-height: 250px;
     }
 }
 
@@ -2633,7 +2769,8 @@ export default {
    ============================================ */
 .use-recipe-modal-new {
     max-width: min(850px, 95vw);
-    max-height: 90vh;
+    /* CHANGED: Better max-height calculation */
+    max-height: calc(90vh - var(--navbar-height) - 20px);
     border-radius: var(--radius-lg);
     overflow: hidden;
     display: flex;
@@ -2644,7 +2781,8 @@ export default {
     padding: 0;
     display: flex;
     flex-direction: column;
-    max-height: 90vh;
+    /* CHANGED: Better height management */
+    max-height: calc(90vh - var(--navbar-height) - 20px);
     overflow: hidden;
 }
 
@@ -2656,6 +2794,7 @@ export default {
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
 }
+
 
 /* XS-SM: Stack vertically */
 @media (max-width: 599px) {
@@ -2697,10 +2836,10 @@ export default {
 }
 
 .confirmation-info-right {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: clamp(10px, 2vw, 12px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start; /* ✅ not center */
+  gap: 12px;
 }
 
 .confirmation-badges-top {
@@ -2790,11 +2929,47 @@ export default {
 .stat-value.match-low { color: var(--danger); }
 .stat-value.expiring-stat { color: #ff6b6b; }
 
+/* CHANGED: Better scrolling for ingredients section - ISSUE #3 */
 .ingredients-section-redesign {
     padding: clamp(20px, 4vw, 30px);
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    /* ADDED: Better height management for different screens */
+    max-height: calc(90vh - var(--navbar-height) - 400px);
+}
+
+/* Responsive height adjustments */
+@media (max-height: 800px) {
+    .ingredients-section-redesign {
+        max-height: calc(90vh - var(--navbar-height) - 350px);
+    }
+}
+
+@media (max-height: 650px) {
+    .ingredients-section-redesign {
+        max-height: calc(90vh - var(--navbar-height) - 300px);
+    }
+}
+
+@media (max-width: 599px) {
+    .ingredients-section-redesign {
+        max-height: calc(90vh - var(--navbar-height) - 450px);
+    }
+}
+
+/* CHANGED: Better positioning for action buttons - ISSUE #3 */
+.modal-actions-redesign {
+    display: flex;
+    gap: clamp(10px, 2vw, 12px);
+    padding: clamp(15px, 3vw, 20px) clamp(20px, 4vw, 30px);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-light);
+    flex-shrink: 0;
+    /* ADDED: Ensure buttons are always visible */
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
 }
 
 .ingredients-section-redesign::-webkit-scrollbar {
@@ -3025,15 +3200,6 @@ export default {
 .unit-warning {
     font-size: 1.2em;
     cursor: help;
-}
-
-.modal-actions-redesign {
-    display: flex;
-    gap: clamp(10px, 2vw, 12px);
-    padding: clamp(15px, 3vw, 20px) clamp(20px, 4vw, 30px);
-    border-top: 1px solid var(--border-color);
-    background: var(--bg-light);
-    flex-shrink: 0;
 }
 
 @media (max-width: 599px) {
@@ -3347,7 +3513,8 @@ export default {
 /* Desktop positioning */
 @media (min-width: 768px) {
     .success-notification-top {
-        top: 20px;
+        /* CHANGED: Account for navbar */
+        top: calc(var(--navbar-height) + 20px);
         left: 50%;
         transform: translateX(-50%);
         max-width: 500px;
@@ -3358,7 +3525,8 @@ export default {
 /* Mobile positioning */
 @media (max-width: 767px) {
     .success-notification-top {
-        top: 10px;
+        /* CHANGED: Account for navbar */
+        top: calc(var(--navbar-height) + 10px);
         left: 10px;
         right: 10px;
         transform: none;
@@ -3770,11 +3938,11 @@ export default {
     margin: 0;
 }
 
-/* ============================================
-   HOW IT WORKS MODAL - RESPONSIVE
-   ============================================ */
+/* how it works modal */
 .how-it-works-modal {
     max-width: min(900px, 95vw);
+    /* CHANGED: Account for navbar */
+    max-height: calc(90vh - var(--navbar-height) - 20px);
     padding: 0;
     animation: modalSlideIn var(--transition-normal) ease-out;
 }
